@@ -314,11 +314,22 @@ export function ChatWidget({
   };
 
   useEffect(() => {
+    const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount?.[currentUserId] || 0), 0);
+    window.dispatchEvent(new CustomEvent('chat_unread_count_updated', { detail: totalUnread }));
+  }, [conversations, currentUserId]);
+
+  useEffect(() => {
     if (activeConversation && messages.length > 0) {
       const hasUnread = messages.some((m: ChatMessage) => !m.isRead && m.senderId !== currentUserId);
       if (hasUnread) {
          markMessagesAsRead(activeConversation.id, currentUserId);
          emitMessagesRead(activeConversation.id, currentUserId);
+         // Also clear unread count for this conversation in state
+         setConversations(prev => prev.map(c => 
+            c.id === activeConversation.id 
+              ? { ...c, unreadCount: { ...c.unreadCount, [currentUserId]: 0 } }
+              : c
+         ));
       }
     }
   }, [messages, activeConversation, currentUserId]);

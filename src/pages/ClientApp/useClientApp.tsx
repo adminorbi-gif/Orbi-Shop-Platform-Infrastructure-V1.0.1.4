@@ -226,6 +226,7 @@ import {
   Wheat,
 } from "lucide-react";
 import { Lang, t } from "../../lib/i18nClient";
+import { fetchConversations } from "../../lib/chat";
 import { apiFetch } from "../../lib/db";
 import { useDialog } from "../../components/CustomDialogContext";
 
@@ -2495,6 +2496,14 @@ Zawadi ya Alama za Uaminifu zilizoongezwa kwenye kibeti chako: +${earned} Points
     }
     const fetchGuestMsgs = async () => {
       try {
+        try {
+          const conversations = await fetchConversations(activeUser.id, "customer");
+          const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount?.[activeUser.id] || 0), 0);
+          window.dispatchEvent(new CustomEvent('chat_unread_count_updated', { detail: totalUnread }));
+        } catch (err) {
+          console.warn("Failed to fetch conversations unread count:", err);
+        }
+
         const all = await db.getMessages();
         const userMsgs = all.filter((m) => {
           const isSameCustomer = m.customerId === activeUser.id;
@@ -2525,19 +2534,13 @@ Zawadi ya Alama za Uaminifu zilizoongezwa kwenye kibeti chako: +${earned} Points
     };
   }, [activeUser]);
 
-  const unreadCount = useMemo(() => {
-    if (!activeUser || guestMessages.length === 0) return 0;
-    return guestMessages.filter((m) => {
-      // Message is from admin if it is admin initiated OR has an admin reply
-      const isFromAdmin =
-        m.message === "Ujumbe kutoka Orbi Shop" ||
-        m.message === "Admin initiated dummy" ||
-        m.message === "Ujumbe toka kwa Admin" ||
-        m.message === "Ujumbe toka kwa Orbi Shop" ||
-        !!m.adminReply;
-      return isFromAdmin && !readReplyIds.includes(m.id);
-    }).length;
-  }, [guestMessages, activeUser, readReplyIds]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const handleUnreadCount = (e: any) => setUnreadCount(e.detail);
+    window.addEventListener('chat_unread_count_updated', handleUnreadCount);
+    return () => window.removeEventListener('chat_unread_count_updated', handleUnreadCount);
+  }, []);
 
   const logoutClient = async () => {
     localStorage.removeItem("Orbishop_customers");

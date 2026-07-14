@@ -5186,17 +5186,13 @@ export function CustomerProfile({
     }
   });
 
-  const tabUnreadCount = useMemo(() => {
-    return messages.filter((m) => {
-      const isFromAdmin =
-        m.message === "Ujumbe kutoka Orbi Shop" ||
-        m.message === "Admin initiated dummy" ||
-        m.message === "Ujumbe toka kwa Admin" ||
-        m.message === "Ujumbe toka kwa Orbi Shop" ||
-        !!m.adminReply;
-      return isFromAdmin && !localReadIds.includes(m.id);
-    }).length;
-  }, [messages, localReadIds]);
+  const [tabUnreadCount, setTabUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const handleUnreadCount = (e: any) => setTabUnreadCount(e.detail);
+    window.addEventListener('chat_unread_count_updated', handleUnreadCount);
+    return () => window.removeEventListener('chat_unread_count_updated', handleUnreadCount);
+  }, []);
 
   useEffect(() => {
     let active = true;
