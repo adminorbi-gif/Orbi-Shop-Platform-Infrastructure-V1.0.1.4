@@ -1324,17 +1324,17 @@ export function ChatRoom({
             const isAiBot = msg.senderId === "orbi-ai-agent" || msg.senderName === "Orbi AI Support";
             
             let bubbleClasses = isMe
-              ? "bg-slate-900 text-white rounded-tr-none shadow-xs border border-slate-800"
-              : "bg-white text-slate-800 border border-slate-200/80 rounded-tl-none shadow-2xs";
+              ? "bg-slate-900 text-white rounded-bl-none shadow-xs border border-slate-800"
+              : "bg-white text-slate-800 border border-slate-200/80 rounded-br-none shadow-2xs";
 
             if (isAiBot) {
-              bubbleClasses = "bg-indigo-50/50 border border-indigo-150 text-slate-900 rounded-tl-none shadow-sm";
+              bubbleClasses = "bg-indigo-50/50 border border-indigo-150 text-slate-900 rounded-br-none shadow-sm";
             }
 
             if (isAdminPreview) {
-               if (msg.senderRole === "seller") bubbleClasses = "bg-blue-50 border-blue-200 text-blue-900 rounded-tl-none shadow-2xs";
-               else if (msg.senderRole === "customer") bubbleClasses = "bg-emerald-50 border-emerald-200 text-emerald-900 rounded-tr-none shadow-2xs";
-               else bubbleClasses = "bg-slate-900 text-white rounded-tr-none shadow-xs";
+               if (msg.senderRole === "seller") bubbleClasses = "bg-blue-50 border-blue-200 text-blue-900 rounded-bl-none shadow-2xs";
+               else if (msg.senderRole === "customer") bubbleClasses = "bg-emerald-50 border-emerald-200 text-emerald-900 rounded-br-none shadow-2xs";
+               else bubbleClasses = "bg-slate-900 text-white rounded-br-none shadow-xs border border-slate-800";
             }
 
             if (msg.isSending) {
@@ -1349,7 +1349,7 @@ export function ChatRoom({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ type: "spring", damping: 24, stiffness: 350 }}
                 key={msg.id || idx} 
-                className={`flex flex-col ${isMe || (isAdminPreview && msg.senderRole === 'customer') ? "items-end" : "items-start"}`}
+                className={`flex flex-col ${!isMe || (isAdminPreview && msg.senderRole === 'customer') ? "items-end" : "items-start"}`}
               >
                 {conversation.id === "orbi_business_community" && !isMe && (
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 mb-1 pl-9">
@@ -1365,29 +1365,29 @@ export function ChatRoom({
                     </span>
                   </div>
                 )}
-                <div className={`flex items-end gap-2.5 ${
+                <div className={`flex items-end gap-2.5 ${(!isMe && !isAdminPreview) || (isAdminPreview && msg.senderRole === "customer") ? "flex-row-reverse" : ""} ${
                   isAiBot 
                     ? "max-w-[98%] sm:max-w-[95%] md:max-w-[92%] lg:max-w-[90%] w-full" 
                     : "max-w-[95%] sm:max-w-[90%] md:max-w-[85%] lg:max-w-[82%]"
                 }`}>
-                  {(!isMe || isAdminPreview) && msg.senderRole !== 'customer' && (
-                    <div className={`w-7 h-7 rounded-full flex-shrink-0 mb-1 flex items-center justify-center overflow-hidden border shadow-2xs ${
-                      isAiBot ? "bg-indigo-600 text-white border-indigo-200" : "bg-slate-150 text-slate-600 border-slate-200"
-                    }`}>
-                      {isAiBot ? (
-                        <Bot size={13} />
-                      ) : (msg.senderId === "support" || msg.senderId === "00000000-0000-0000-0000-000000000001" || msg.senderName?.toLowerCase().includes("orbi shop") || msg.senderName?.toLowerCase().includes("orbi store") || msg.senderRole === "admin") ? (
-                        <ImageWithSkeleton
-                          src="https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png"
-                          alt="Orbi Logo"
-                          containerClassName="w-full h-full"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-black">{msg.senderRole ? msg.senderRole[0].toUpperCase() : "S"}</span>
-                      )}
-                    </div>
-                  )}
+                  <div className={`w-7 h-7 rounded-full flex-shrink-0 mb-1 flex items-center justify-center overflow-hidden border shadow-2xs ${
+                    isAiBot ? "bg-indigo-600 text-white border-indigo-200" : (isMe ? "bg-slate-100 text-slate-600 border-slate-200" : "bg-slate-150 text-slate-600 border-slate-200")
+                  }`}>
+                    {isAiBot ? (
+                      <Bot size={13} />
+                    ) : (!isMe && (msg.senderId === "support" || msg.senderId === "00000000-0000-0000-0000-000000000001" || msg.senderName?.toLowerCase().includes("orbi shop") || msg.senderName?.toLowerCase().includes("orbi store") || msg.senderRole === "admin")) ? (
+                      <ImageWithSkeleton
+                        src="https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png"
+                        alt="Orbi Logo"
+                        containerClassName="w-full h-full"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : isMe ? (
+                       <User size={14} className="text-white" />
+                    ) : (
+                      <span className="text-[10px] font-black">{msg.senderRole ? msg.senderRole[0].toUpperCase() : "U"}</span>
+                    )}
+                  </div>
                   <div className={`rounded-2xl ${bubbleClasses} ${
                     isAiBot ? "px-5 py-4 sm:px-6 sm:py-5 w-full" : "px-4 py-3"
                   }`}>
@@ -1435,7 +1435,7 @@ export function ChatRoom({
               <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex-shrink-0 mb-1 flex items-center justify-center border border-indigo-200 shadow-2xs">
                 <Bot size={13} />
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-indigo-50/85 border border-indigo-100 text-indigo-900 rounded-tl-none flex items-center gap-1.5 shadow-2xs">
+              <div className="px-4 py-3 rounded-2xl bg-indigo-50/85 border border-indigo-100 text-indigo-900 rounded-bl-none flex items-center gap-1.5 shadow-2xs">
                 <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
                 <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]" />
                 <span className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" />
