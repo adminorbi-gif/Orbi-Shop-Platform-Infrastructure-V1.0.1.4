@@ -607,6 +607,8 @@ const slugify = (text: string) => {
 };
 
 export default function ClientApp() {
+  const [aiSearchQuery, setAiSearchQuery] = useState("");
+  const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
   const activeCurrency = useUserCurrency();
   const [selectedBundle, setSelectedBundle] = useState<SmartBundle | null>(null);
   const {
@@ -4707,6 +4709,30 @@ export default function ClientApp() {
                   </button>
                 </div>
               </div>
+              
+              {/* Search Bar */}
+              {isAiSearchOpen && (
+                <div className="bg-slate-50 border-b border-slate-200 p-2 sm:p-3 shrink-0">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder={lang === "sw" ? "Tafuta ujumbe..." : "Search messages..."}
+                      value={aiSearchQuery}
+                      onChange={(e) => setAiSearchQuery(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-8 text-sm text-slate-700 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all placeholder:text-slate-400"
+                    />
+                    {aiSearchQuery && (
+                      <button
+                        onClick={() => setAiSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md hover:bg-slate-100"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Chat messages */}
               <div className="flex-1 overflow-y-auto p-5 bg-slate-50/70 space-y-4 flex flex-col [background-image:radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:20px_20px]">
                 {aiChatHistory.length === 0 ? (
@@ -4757,7 +4783,7 @@ export default function ClientApp() {
                   </div>
                 ) : (
                   <div className="space-y-3.5">
-                    {aiChatHistory.map((chat, idx) => {
+                    {(aiSearchQuery.trim() ? aiChatHistory.filter(c => typeof c.content === 'string' && c.content.toLowerCase().includes(aiSearchQuery.toLowerCase())) : aiChatHistory).map((chat, idx) => {
                       const isUser = chat.role === "user";
                       return (
                         <div

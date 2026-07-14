@@ -1,5 +1,28 @@
 [
   {
+    "id": "v-2ER2MMNAS",
+    "ip": "197.26.190.35",
+    "device": "Mobile",
+    "carrier": "Vodacom",
+    "location": {
+      "city": "Mbeya",
+      "region": "Southern Highlands",
+      "lat": -8.908,
+      "lng": 33.4518
+    },
+    "searches": [
+      {
+        "query": "Niche: Auto & Motors",
+        "timestamp": "2026-07-14T19:33:00.745Z",
+        "source": "direct"
+      }
+    ],
+    "cartActions": [],
+    "checkoutCompleted": false,
+    "createdAt": "2026-07-14T19:33:00.745Z",
+    "lastActive": "2026-07-14T19:33:00.745Z"
+  },
+  {
     "id": "v-8NX2W6GHB",
     "ip": "197.26.250.108",
     "device": "Mobile",

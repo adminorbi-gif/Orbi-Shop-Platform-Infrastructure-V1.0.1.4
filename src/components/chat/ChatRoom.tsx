@@ -1380,7 +1380,7 @@ export function ChatRoom({
           </div>
           )
         ) : (
-          messages.map((msg, idx) => {
+          (searchQuery.trim() ? messages.filter(m => m.content && m.content.toLowerCase().includes(searchQuery.toLowerCase())) : messages).map((msg, idx) => {
             const isMe = msg.senderId === currentUserId;
             // Identify if the message is from the special AI Support Bot
             const isAiBot = msg.senderId === "orbi-ai-agent" || msg.senderName === "Orbi AI Support";

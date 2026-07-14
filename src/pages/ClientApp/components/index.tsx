@@ -6224,773 +6224,206 @@ export function CustomerProfile({
                     ? o.status.toUpperCase()
                     : "CREATED";
                   const payStatus = o.paymentStatus || "requires_action";
-
                   return (
                     <div
                       key={o.id}
-                      className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md hover:border-slate-300"
+                      className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col mb-6 transition-all hover:shadow-md"
                     >
-                      <div className="flex-1 w-full">
-                        <h3 className="font-bold text-slate-800 text-lg">
-                          Oda #{formatOrderNumber(o)}
-                        </h3>
-                        <div className="text-sm text-slate-500 mb-2">
-                          {new Date(o.date).toLocaleString()}
+                      {/* Mobile-Friendly Header */}
+                      <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-500 shrink-0">
+                            <Package size={20} />
+                          </div>
+                          <div className="flex flex-col">
+                            <h3 className="font-black text-slate-900 text-lg tracking-tight leading-none mb-1">
+                              {lang === "sw" ? "Oda #" : "Order #"}{formatOrderNumber(o)}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-semibold">
+                              {new Date(o.date).toLocaleString(lang === "sw" ? "sw-TZ" : "en-US", { dateStyle: "medium", timeStyle: "short" })}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex gap-2 items-center font-bold flex-wrap">
-                          <span
-                            className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[10px] md:text-xs px-2.5 py-1 rounded-full font-black uppercase tracking-wider text-center shrink-0 border shadow-sm ${
-                              statusUpper === "PAYMENT_HELD" ||
-                              statusUpper === "PROCESSING"
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : statusUpper === "SHIPPED"
-                                  ? "bg-sky-50 text-sky-700 border-sky-300 animate-pulse"
-                                  : statusUpper === "DELIVERED"
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                    : statusUpper === "BUYER_CONFIRMED"
-                                      ? "bg-teal-50 text-teal-700 border-teal-200"
-                                      : statusUpper === "RELEASED"
-                                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                        : statusUpper === "DISPUTED"
-                                          ? "bg-rose-50 text-rose-700 border-rose-300"
-                                          : statusUpper === "CANCELLED" ||
-                                              statusUpper === "REFUNDED"
-                                            ? "bg-red-50 text-red-700 border-red-200"
-                                            : "bg-amber-50 text-amber-700 border-amber-250"
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                statusUpper === "RELEASED"
-                                  ? "bg-emerald-500"
-                                  : statusUpper === "DISPUTED"
-                                    ? "bg-rose-500"
-                                    : statusUpper === "SHIPPED"
-                                      ? "bg-sky-500 animate-ping"
-                                      : "bg-current"
-                              }`}
-                            ></span>
-                            {statusUpper === "CREATED" &&
-                              (lang === "sw" ? "Imepokelewa" : "Created")}
-                            {statusUpper === "AWAITING_PAYMENT" &&
-                              (lang === "sw"
-                                ? "Inasubiri Malipo"
-                                : "Awaiting Payment")}
-                            {statusUpper === "PAYMENT_HELD" &&
-                              (lang === "sw"
-                                ? "Yameshikiliwa"
-                                : "Payment Held")}
-                            {statusUpper === "PROCESSING" &&
-                              (lang === "sw" ? "Inandaliwa" : "Processing")}
-                            {statusUpper === "SHIPPED" &&
-                              (lang === "sw" ? "Mzigo Njiani" : "Transit")}
-                            {statusUpper === "DELIVERED" &&
-                              (lang === "sw"
-                                ? "Imefika / Thibitisha"
-                                : "Delivered / Confirm Receipt")}
-                            {statusUpper === "BUYER_CONFIRMED" &&
-                              (lang === "sw"
-                                ? "Thibitisho Limepokelewa"
-                                : "Receipt Confirmed")}
-                            {statusUpper === "DISPUTED" &&
-                              (lang === "sw"
-                                ? "Iko Kwenye Mgogoro"
-                                : "Disputed (Escrow Held)")}
-                            {statusUpper === "RELEASED" &&
-                              (lang === "sw"
-                                ? "Fedha Zimechukuliwa"
-                                : "Completed & Disbursed")}
-                            {statusUpper === "REFUNDED" &&
-                              (lang === "sw" ? "Imerejeshwa" : "Refunded")}
-                            {statusUpper === "CANCELLED" &&
-                              (lang === "sw" ? "Imeghairiwa" : "Cancelled")}
+                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0">
+                          <span className={`px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider border shadow-xs ${statusUpper === "PAYMENT_HELD" || statusUpper === "PROCESSING" ? "bg-amber-50 text-amber-700 border-amber-200" : statusUpper === "SHIPPED" ? "bg-sky-50 text-sky-700 border-sky-300" : statusUpper === "DELIVERED" || statusUpper === "BUYER_CONFIRMED" || statusUpper === "RELEASED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : statusUpper === "CANCELLED" || statusUpper === "REFUNDED" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-slate-100 text-slate-700 border-slate-200"}`}>
+                            {statusUpper}
                           </span>
-                          <span className="text-slate-700">
-                            <PriceDisplay
-                              amount={o.total}
-                              size="sm"
-                              colorClass="text-slate-700"
-                            />
-                          </span>
+                          <div className="text-right">
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-0.5">{lang === "sw" ? "Jumla" : "Total"}</p>
+                            <PriceDisplay amount={o.total} size="lg" colorClass="text-slate-900 font-black" />
+                          </div>
                         </div>
-
-                        {/* Real-time Order Tracking Status Indicator */}
-                        {statusUpper === "CANCELLED" ||
-                        statusUpper === "REFUNDED" ? (
-                          <div className="mt-4 p-3 bg-red-50 border border-red-150 rounded-xl flex items-center gap-2.5 text-xs text-red-800 font-medium">
-                            <span className="p-1 px-2.5 bg-red-100 rounded-lg text-red-600 font-extrabold text-xs">
-                              ✕
-                            </span>
-                            <div>
-                              <p className="font-extrabold text-red-900">
-                                {lang === "sw"
-                                  ? "Oda Imeghairiwa au Rejerewa"
-                                  : "Order Cancelled / Refunded"}
-                              </p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">
-                                {lang === "sw"
-                                  ? "Oda hii imefutwa au kiasi kurudishwa kwa mnunuzi."
-                                  : "This order was cancelled or refunded to the buyer secure ledger."}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-4 mb-4 p-4 bg-slate-50/80 border border-slate-100 rounded-2xl md:max-w-md w-full">
-                            <div className="flex items-center justify-between mb-3 text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                              {statusUpper === "BUYER_CONFIRMED" ||
-                              statusUpper === "RELEASED" ? (
-                                <span className="flex items-center gap-1 text-emerald-600 font-extrabold tracking-wider">
-                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                                  {lang === "sw"
-                                    ? "Agizo Limekamilika"
-                                    : "Order Completed"}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-orange-600 font-extrabold tracking-wider animate-pulse">
-                                  <span className="w-1.5 h-1.5 bg-orange-600 rounded-full animate-ping"></span>
-                                  {lang === "sw"
-                                    ? "Mchakato wa Kusafirisha"
-                                    : "Order Transit Progress"}
-                                </span>
-                              )}
-                              <span className="font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-100">
-                                {(statusUpper === "CREATED" ||
-                                  statusUpper === "AWAITING_PAYMENT") &&
-                                  (lang === "sw" ? "Inasubiri" : "Pending")}
-                                {(statusUpper === "PAYMENT_HELD" ||
-                                  statusUpper === "PROCESSING") &&
-                                  (lang === "sw"
-                                    ? "Imeidhinishwa"
-                                    : "Processing")}
-                                {statusUpper === "SHIPPED" &&
-                                  (lang === "sw"
-                                    ? o.riderName
-                                      ? "Imesafirishwa / " + o.riderName
-                                      : "Imesafirishwa"
-                                    : o.riderName
-                                      ? "Transit / " + o.riderName
-                                      : "Transit")}
-                                {[
-                                  "DELIVERED",
-                                  "BUYER_CONFIRMED",
-                                  "RELEASED",
-                                ].includes(statusUpper) &&
-                                  (lang === "sw" ? "Imepokelewa" : "Delivered")}
-                              </span>
-                            </div>
-
-                            {/* Stepper Steps Wrapper with horizontal scrolling on ultra-small mobile screen */}
-                            <div className="overflow-x-auto no-scrollbar -mx-2 px-2 py-1 touch-pan-x">
-                              <div className="relative flex items-center justify-between min-w-[340px] w-full mt-2.5 px-0.5">
-                                {/* Stepper background line */}
-                                <div className="absolute left-[33px] right-[33px] top-[14px] h-0.5 bg-slate-200 z-0"></div>
-                                {/* Stepper travel line progress bar */}
-                                <div
-                                  className="absolute left-[33px] top-[14px] h-0.5 bg-gradient-to-r from-emerald-500 to-indigo-500 z-0 transition-all duration-700 ease-in-out"
-                                  style={{
-                                    width:
-                                      statusUpper === "CREATED" ||
-                                      statusUpper === "AWAITING_PAYMENT"
-                                        ? "0%"
-                                        : statusUpper === "PAYMENT_HELD" ||
-                                            statusUpper === "PROCESSING"
-                                          ? "33%"
-                                          : statusUpper === "SHIPPED"
-                                            ? "66%"
-                                            : "100%",
-                                  }}
-                                ></div>
-
-                                {/* Node 1: Placed */}
-                                <div className="flex flex-col items-center z-10 relative">
-                                  <div className="w-7 h-7 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-white text-[10px] font-black shadow-sm">
-                                    <Check size={10} className="stroke-[3]" />
-                                  </div>
-                                  <span className="text-[9px] font-extrabold text-slate-700 mt-1 text-center whitespace-nowrap">
-                                    {lang === "sw" ? "Imewekwa" : "Placed"}
-                                  </span>
-                                </div>
-
-                                {/* Node 2: Confirmed */}
-                                <div className="flex flex-col items-center z-10 relative">
-                                  <div
-                                    className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black shadow-sm transition-all duration-500 ${
-                                      [
-                                        "PAYMENT_HELD",
-                                        "PROCESSING",
-                                        "SHIPPED",
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                      ].includes(statusUpper)
-                                        ? "bg-emerald-500 text-white"
-                                        : "bg-slate-100 text-slate-400"
-                                    }`}
-                                  >
-                                    {[
-                                      "PAYMENT_HELD",
-                                      "PROCESSING",
-                                      "SHIPPED",
-                                      "DELIVERED",
-                                      "BUYER_CONFIRMED",
-                                      "RELEASED",
-                                    ].includes(statusUpper) ? (
-                                      <Check size={10} className="stroke-[3]" />
-                                    ) : (
-                                      <span>2</span>
-                                    )}
-                                  </div>
-                                  <span
-                                    className={`text-[9px] font-extrabold mt-1 text-center whitespace-nowrap ${
-                                      [
-                                        "PAYMENT_HELD",
-                                        "PROCESSING",
-                                        "SHIPPED",
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                      ].includes(statusUpper)
-                                        ? "text-slate-700"
-                                        : "text-slate-400 font-medium"
-                                    }`}
-                                  >
-                                    {lang === "sw"
-                                      ? "Imeandaliwa"
-                                      : "Processing"}
-                                  </span>
-                                </div>
-
-                                {/* Node 3: Shipped */}
-                                <div className="flex flex-col items-center z-10 relative">
-                                  <div
-                                    className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black shadow-sm transition-all duration-500 ${
-                                      [
-                                        "SHIPPED",
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                      ].includes(statusUpper)
-                                        ? "bg-indigo-500 text-white"
-                                        : "bg-slate-100 text-slate-400"
-                                    } ${statusUpper === "SHIPPED" ? "animate-bounce" : ""}`}
-                                  >
-                                    {[
-                                      "SHIPPED",
-                                      "DELIVERED",
-                                      "BUYER_CONFIRMED",
-                                      "RELEASED",
-                                    ].includes(statusUpper) ? (
-                                      <Truck
-                                        size={10}
-                                        className="stroke-[2.5]"
-                                      />
-                                    ) : (
-                                      <span>3</span>
-                                    )}
-                                  </div>
-                                  <span
-                                    className={`text-[9px] font-extrabold mt-1 text-center whitespace-nowrap ${
-                                      [
-                                        "SHIPPED",
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                      ].includes(statusUpper)
-                                        ? "text-slate-700"
-                                        : "text-slate-400 font-medium"
-                                    }`}
-                                  >
-                                    {lang === "sw"
-                                      ? "Imesafilishwa"
-                                      : "In Transit"}
-                                  </span>
-                                </div>
-
-                                {/* Node 4: Delivered */}
-                                <div className="flex flex-col items-center z-10 relative">
-                                  <div
-                                    className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black shadow-sm transition-all duration-500 ${
-                                      [
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                        "ARCHIVED",
-                                      ].includes(statusUpper)
-                                        ? "bg-emerald-600 text-white"
-                                        : "bg-slate-100 text-slate-400"
-                                    }`}
-                                  >
-                                    {[
-                                      "DELIVERED",
-                                      "BUYER_CONFIRMED",
-                                      "RELEASED",
-                                      "ARCHIVED",
-                                    ].includes(statusUpper) ? (
-                                      <Gift
-                                        size={10}
-                                        className="stroke-[2.5]"
-                                      />
-                                    ) : (
-                                      <span>4</span>
-                                    )}
-                                  </div>
-                                  <span
-                                    className={`text-[9px] font-extrabold mt-1 text-center whitespace-nowrap ${
-                                      [
-                                        "DELIVERED",
-                                        "BUYER_CONFIRMED",
-                                        "RELEASED",
-                                        "ARCHIVED",
-                                      ].includes(statusUpper)
-                                        ? "text-emerald-700 font-bold"
-                                        : "text-slate-400 font-medium"
-                                    }`}
-                                  >
-                                    {lang === "sw"
-                                      ? "Imepokelewa"
-                                      : "Delivered"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Interactive Courier alert block for In Transit */}
-                            {statusUpper === "SHIPPED" && (
-                              <div className="mt-4 p-2 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between text-[10px] text-indigo-900 font-semibold gap-1.5 animate-in fade-in duration-300">
-                                <span className="flex items-center gap-1 flex-1">
-                                  <Truck
-                                    size={11}
-                                    className="text-indigo-600 animate-pulse shrink-0"
-                                  />
-                                  <span>
-                                    {lang === "sw"
-                                      ? o.riderName
-                                        ? `Msafirishaji ${o.riderName}${o.riderPhone ? " (Simu: " + o.riderPhone + ")" : ""}${o.riderVehicle ? ", Chombo: " + o.riderVehicle : ""} yuko njiani kuleta mzigo!`
-                                        : "Msafirishaji wetu yuko njiani kuleta mzigo!"
-                                      : o.riderName
-                                        ? `Rider ${o.riderName}${o.riderPhone ? " (Phone: " + o.riderPhone + ")" : ""}${o.riderVehicle ? ", Vehicle: " + o.riderVehicle : ""} is delivering your package!`
-                                        : "Our courier is currently delivering your package!"}
-                                  </span>
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    setTrackOrderId(o.id);
-                                    setTab("track");
-                                    handleTrackSearch(o.id);
-                                  }}
-                                  className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded text-[9px] transition cursor-pointer active:scale-95 shrink-0"
-                                >
-                                  {lang === "sw" ? "Fungua Ramani" : "Open Map"}
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Escrow Trust Information Badge */}
-                            <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-start gap-2 text-[10px] text-slate-500 leading-relaxed">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                              <p>
-                                {lang === "sw" ? (
-                                  <>
-                                    <span className="font-extrabold text-slate-700 block mb-0.5">Ulinzi wa Orbi Pay Escrow:</span>
-                                    Fedha zako zimehifadhiwa salama. Muuzaji atalipwa TU pindi utakapothibitisha kuwa mzigo umekufikia ukiwa salama.
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="font-extrabold text-slate-700 block mb-0.5">Orbi Pay Escrow Protected:</span>
-                                    Your funds are held safely by Orbi Pay. The seller will ONLY receive payment once you confirm successful receipt of your items.
-                                  </>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Database-synced Payment Reference with Reset capability */}
-                        {o.status !== "cancelled" && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-black tracking-wider text-slate-500 uppercase">
-                              {lang === "sw"
-                                ? "UHAKIKI WA MALIPO:"
-                                : "PAYMENT VERIFICATION:"}
-                            </span>
-                            {o.paymentReference ? (
-                              <div className="flex items-center gap-2">
-                                <span className="px-2.5 py-1 bg-amber-50 rounded-lg border border-orange-200 text-orange-700 font-mono font-bold text-[10px] tracking-wider">
-                                  REF: {o.paymentReference}
-                                </span>
-                                <button
-                                  onClick={async () => {
-                                    if (
-                                      window.confirm(
-                                        lang === "sw"
-                                          ? "Je, unataka kuweka upya uhakiki wa malipo?"
-                                          : "Do you want to reset the payment verification?",
-                                      )
-                                    ) {
-                                      try {
-                                        await db.saveOrder({
-                                          id: o.id,
-                                          paymentReference: "",
-                                        });
-                                        const proofs = JSON.parse(
-                                          localStorage.getItem(
-                                            "orbi_payment_proofs",
-                                          ) || "{}",
-                                        );
-                                        delete proofs[o.id];
-                                        delete proofs[
-                                          (o as any).legacy_id || ""
-                                        ];
-                                        localStorage.setItem(
-                                          "orbi_payment_proofs",
-                                          JSON.stringify(proofs),
-                                        );
-                                        if (onRefresh) onRefresh();
-                                      } catch (err) {
-                                        console.error(
-                                          "Failed to reset proof:",
-                                          err,
-                                        );
-                                      }
-                                    }
-                                  }}
-                                  className="text-[10px] text-rose-600 hover:text-rose-700 font-bold hover:underline cursor-pointer ml-1"
-                                >
-                                  {lang === "sw"
-                                    ? "Anza Upya (Reset)"
-                                    : "Reset"}
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="mt-4 w-full max-w-md bg-amber-50/40 border border-amber-200/50 rounded-xl p-3">
-                                <p className="text-[10px] text-amber-800 font-extrabold flex items-center gap-1.5 mb-1.5 uppercase tracking-wide">
-                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
-                                  {lang === "sw" ? "Thibitisha Malipo ya Simu (M-Pesa, Tigo Pesa...)" : "Confirm Mobile Money (M-Pesa, Tigo Pesa...)"}
-                                </p>
-                                <p className="text-[10px] text-slate-500 mb-2 leading-normal">
-                                  {lang === "sw"
-                                    ? "Ingiza msimbo wa muamala (mfano PK8123...) uliopokea kwenye SMS ya mtandao wako wa simu ili kuanza maandalizi ya mzigo wako."
-                                    : "Enter the SMS transaction code (e.g., PK8123...) from your mobile money provider to start preparation of your order."}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    placeholder={
-                                      lang === "sw"
-                                        ? "Msimbo wa Muamala"
-                                        : "Transaction Code"
-                                    }
-                                    id={`ref-input-${o.id}`}
-                                    className="flex-1 min-h-10 bg-white border border-slate-200 text-slate-900 px-3 rounded-xl text-xs font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary placeholder:normal-case placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                                    onKeyDown={async (e) => {
-                                      if (e.key === "Enter") {
-                                        const val = (
-                                          e.target as HTMLInputElement
-                                        ).value.trim();
-                                        if (!val) return;
-                                        try {
-                                          await db.saveOrder({
-                                            id: o.id,
-                                            paymentReference: val.toUpperCase(),
-                                          });
-                                          const proofs = JSON.parse(
-                                            localStorage.getItem(
-                                              "orbi_payment_proofs",
-                                            ) || "{}",
-                                          );
-                                          proofs[o.id] = {
-                                            transactionId: val.toUpperCase(),
-                                            timestamp: Date.now(),
-                                            status: "pending_verification",
-                                          };
-                                          localStorage.setItem(
-                                            "orbi_payment_proofs",
-                                            JSON.stringify(proofs),
-                                          );
-                                          showAlert(
-                                            lang === "sw"
-                                              ? "Thibitisho la malipo limewasilishwa!"
-                                              : "Payment reference submitted successfully!",
-                                            "success",
-                                          );
-                                          if (onRefresh) onRefresh();
-                                        } catch (err: any) {
-                                          showAlert(
-                                            lang === "sw"
-                                              ? "Imeshindwa kuhifadhi: " +
-                                                  err.message
-                                              : "Failed to save: " +
-                                                  err.message,
-                                            "error",
-                                          );
-                                        }
-                                      }
-                                    }}
-                                  />
-                                  <button
-                                    onClick={async () => {
-                                      const input = document.getElementById(
-                                        `ref-input-${o.id}`,
-                                      ) as HTMLInputElement;
-                                      const val = input?.value.trim() || "";
-                                      if (!val) {
-                                        showAlert(
-                                          lang === "sw"
-                                            ? "Ingiza namba ya muamala kwanza!"
-                                            : "Enter transaction reference first!",
-                                          "error",
-                                        );
-                                        return;
-                                      }
-                                      try {
-                                        await db.saveOrder({
-                                          id: o.id,
-                                          paymentReference: val.toUpperCase(),
-                                        });
-                                        const proofs = JSON.parse(
-                                          localStorage.getItem(
-                                            "orbi_payment_proofs",
-                                          ) || "{}",
-                                        );
-                                        proofs[o.id] = {
-                                          transactionId: val.toUpperCase(),
-                                          timestamp: Date.now(),
-                                          status: "pending_verification",
-                                        };
-                                        localStorage.setItem(
-                                          "orbi_payment_proofs",
-                                          JSON.stringify(proofs),
-                                        );
-                                        showAlert(
-                                          lang === "sw"
-                                            ? "Thibitisho la malipo limewasilishwa!"
-                                            : "Payment reference submitted successfully!",
-                                          "success",
-                                        );
-                                        if (onRefresh) onRefresh();
-                                      } catch (err: any) {
-                                        showAlert(
-                                          lang === "sw"
-                                            ? "Imeshindwa kuhifadhi: " +
-                                                err.message
-                                            : "Failed to save: " + err.message,
-                                          "error",
-                                        );
-                                      }
-                                    }}
-                                    className="min-h-10 text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 font-bold text-xs px-4 rounded-xl transition cursor-pointer shadow-sm shadow-orange-500/10 active:scale-95 flex items-center justify-center shrink-0"
-                                  >
-                                    {lang === "sw" ? "Thibitisha" : "Verify"}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
-                      <div className="flex flex-col md:flex-row md:items-center gap-4">
-                        <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5 flex flex-col gap-2">
-                          <p className="text-xs font-semibold text-slate-500 uppercase pb-1">
-                            {lang === "sw" ? "Bidhaa:" : "Items:"}
-                          </p>
-                          {o.items.map((item) => (
-                            <div
-                              key={item.productId}
-                              className="text-sm text-slate-700 flex gap-2"
-                            >
-                              <span className="font-bold">
-                                {item.quantity}x
-                              </span>{" "}
-                              <span
-                                className="truncate max-w-[200px]"
-                                title={item.name}
-                              >
-                                {item.name}
-                              </span>
-                              {[
-                                "DELIVERED",
-                                "BUYER_CONFIRMED",
-                                "RELEASED",
-                                "ARCHIVED",
-                              ].includes(statusUpper) && (
-                                <button
-                                  onClick={() => {
-                                    onWriteReview?.(item.productId, item.name);
-                                  }}
-                                  className="ml-2 font-bold text-[10px] text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-100 transition whitespace-nowrap cursor-pointer"
-                                >
-                                  {lang === "sw"
-                                    ? "Andika Uhakiki"
-                                    : "Write Review"}
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5 flex flex-col justify-center min-w-[200px] gap-2">
-                          {[
-                            "CREATED",
-                            "AWAITING_PAYMENT",
-                            "PAYMENT_HELD",
-                            "PROCESSING",
-                            "SHIPPED",
-                            "DELIVERED",
-                            "BUYER_CONFIRMED",
-                            "RELEASED",
-                            "ARCHIVED",
-                          ].includes(statusUpper) ? (
-                            <div className="flex flex-col gap-2 w-full">
-                              <button
-                                onClick={() => onViewInvoice(o)}
-                                className="bg-primary hover:bg-slate-800 text-white w-full md:w-auto px-5 py-2.5 rounded-lg font-semibold text-sm transition focus:ring-2 focus:ring-accent outline-none whitespace-nowrap inline-flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-                              >
-                                <span className="w-4 h-4">
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                    <polyline points="10 9 9 9 8 9" />
-                                  </svg>
-                                </span>
-                                {[
-                                  "DELIVERED",
-                                  "BUYER_CONFIRMED",
-                                  "RELEASED",
-                                  "ARCHIVED",
-                                ].includes(statusUpper)
-                                  ? lang === "sw"
-                                    ? "Pakua / Angalia Risiti"
-                                    : "Download / View Receipt"
-                                  : lang === "sw"
-                                    ? "Pakua / Angalia Ankara (Invoice)"
-                                    : "Download / View Invoice"}
-                              </button>
 
-                              {["DELIVERED", "SHIPPED"].includes(
-                                statusUpper,
-                              ) && (
-                                <button
-                                  onClick={async () => {
-                                    const confirmChoice = await showConfirm(
-                                      lang === "sw"
-                                        ? "Je, unathibitisha kuwa umepokea mzigo wako kikamilifu? Kufanya hivi kutatoa idhini ya kuachilia malipo kutoka kwenye Orbi Pay (Escrow) kwenda kwa muuzaji. Je, unakubali?"
-                                        : "Are you sure you want to confirm that you have successfully received your order? This will release the funds from Orbi Pay (Escrow) to the seller. Do you consent to complete it now?",
-                                      lang === "sw"
-                                        ? "Thibitisha Pokeo la Mzigo"
-                                        : "Confirm Delivery Receipt",
-                                    );
-
-                                    if (confirmChoice) {
-                                      try {
-                                        const updatedOrder = {
-                                          ...o,
-                                          status: "BUYER_CONFIRMED" as const,
-                                        };
-                                        await db.saveOrder(updatedOrder);
-
-                                        // Update local states immediately
-                                        setLocalOrders((prev) =>
-                                          prev.map((item) =>
-                                            item.id === o.id
-                                              ? {
-                                                  ...item,
-                                                  status:
-                                                    "BUYER_CONFIRMED" as const,
-                                                }
-                                              : item,
-                                          ),
-                                        );
-
-                                        // Add notification message for admin
-                                        await db.saveMessage({
-                                          id: "MSG_SYS_" + Date.now(),
-                                          name: "SYSTEM ALERT",
-                                          phone: "SYSTEM",
-                                          message: `🔔 ODA IMEKAMILIKA! Mteja ${o.customerDetails.name} (${o.customerDetails.phone}) amethibitisha kuwa amepokea mzigo wake kwa oda #${formatOrderNumber(o)}. Malipo sasa yamerelease-iwa kwa seller!`,
-                                          customerId:
-                                            "00000000-0000-0000-0000-000000000000",
-                                          adminReply: null,
-                                          isRead: false,
-                                          date: Date.now(),
-                                        });
-
-                                        showAlert(
-                                          lang === "sw"
-                                            ? "Asante rasi! Mapokezi ya oda yako yamethibitishwa vyema. Malipo sasa yametumwa kwa seller."
-                                            : "Thank you! Your delivery confirmation has been successfully recorded and payments released to the seller.",
-                                          "success",
-                                        );
-                                        if (onRefresh) onRefresh();
-                                      } catch (e: any) {
-                                        showAlert(
-                                          "Failed to confirm delivery: " +
-                                            e.message,
-                                          "error",
-                                        );
-                                      }
-                                    }
-                                  }}
-                                  className="relative bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white w-full px-5 py-3 rounded-xl font-black text-xs transition-all duration-300 inline-flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 animate-pulse border-2 border-white ring-4 ring-emerald-500/30 cursor-pointer overflow-hidden group"
-                                >
-                                  <span
-                                    className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer"
-                                    style={{ animationDuration: "1.5s" }}
-                                  />
-                                  <span className="flex h-2 w-2 relative">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                                  </span>
-                                  <span className="truncate">
-                                    📥{" "}
-                                    {lang === "sw" ? "Nimepokea" : "Received"}
-                                  </span>
-                                </button>
-                              )}
-
-                              {o.status === "delivered" && (
-                                <div className="text-center p-2 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm">
-                                  <Check
-                                    size={14}
-                                    className="stroke-[3] text-emerald-600"
-                                  />
-                                  <span>
-                                    {lang === "sw"
-                                      ? "Masahihisho/Risiti Imekamilika"
-                                      : "Receipt Completed"}
-                                  </span>
+                      {/* Body */}
+                      <div className="p-4 sm:p-5 flex flex-col lg:flex-row gap-6">
+                        {/* Items */}
+                        <div className="flex-1 min-w-0 flex flex-col gap-3">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {lang === "sw" ? "Bidhaa zilizomo" : "Included Items"}
+                          </h4>
+                          <div className="space-y-2.5">
+                            {o.items.map((item) => (
+                              <div key={item.productId} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-slate-100 shadow-sm transition-colors group">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 shrink-0 flex items-center justify-center text-slate-400">
+                                    <Package size={16} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-slate-800 leading-snug truncate">{item.name}</p>
+                                    <p className="text-[11px] text-slate-500 mt-0.5 font-semibold">{lang === "sw" ? "Idadi:" : "Qty:"} {item.quantity}</p>
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-center p-2.5 bg-red-50 rounded-lg border border-red-100">
-                              <p className="text-xs font-bold text-red-800">
-                                {lang === "sw"
-                                  ? "Oda Imeghairiwa"
-                                  : "Order Cancelled"}
-                              </p>
+                                {[ "DELIVERED", "BUYER_CONFIRMED", "RELEASED", "ARCHIVED" ].includes(statusUpper) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onWriteReview?.(item.productId, item.name); }}
+                                    className="px-3.5 py-2 bg-amber-50 border border-amber-200/50 hover:bg-amber-100 text-amber-700 rounded-xl text-[10px] font-extrabold transition-all shrink-0 active:scale-95 z-10"
+                                  >
+                                    {lang === "sw" ? "Andika Uhakiki" : "Write Review"}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Payment Reference UI */}
+                          {o.paymentReference && o.status !== "cancelled" && (
+                            <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{lang === "sw" ? "Kumbukumbu ya Malipo:" : "Payment Ref:"}</span>
+                                <span className="text-sm font-mono font-black text-slate-800">{o.paymentReference}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(lang === "sw" ? "Je, unataka kuweka upya uhakiki wa malipo?" : "Do you want to reset the payment verification?")) {
+                                    try {
+                                      await db.saveOrder({ id: o.id, paymentReference: "" });
+                                      const proofs = JSON.parse(localStorage.getItem("orbi_payment_proofs") || "{}");
+                                      delete proofs[o.id];
+                                      localStorage.setItem("orbi_payment_proofs", JSON.stringify(proofs));
+                                      if (onRefresh) onRefresh();
+                                    } catch (err) {}
+                                  }
+                                }}
+                                className="px-4 py-2 bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 rounded-xl text-[11px] font-extrabold transition-all active:scale-95"
+                              >
+                                {lang === "sw" ? "Badilisha/Reset" : "Reset Reference"}
+                              </button>
                             </div>
                           )}
-                          <button
-                            onClick={() => {
-                              setTrackOrderId(o.id);
-                              setTab("track");
-                              handleTrackSearch(o.id);
-                            }}
-                            className="bg-sky-50 text-sky-700 hover:bg-sky-100 text-center py-2 rounded-lg font-semibold text-xs border border-sky-100 transition whitespace-nowrap inline-flex items-center justify-center gap-1.5"
-                          >
-                            <Clock size={12} />{" "}
-                            {lang === "sw"
-                              ? "Fuatilia (Live Tracker)"
-                              : "Track live status"}
-                          </button>
+
+                          {!o.paymentReference && o.status !== "cancelled" && (
+                            <div className="mt-4 w-full bg-amber-50/60 border border-amber-200/60 rounded-2xl p-4 sm:p-5 shadow-sm">
+                              <p className="text-xs text-amber-800 font-extrabold flex items-center gap-2 mb-2 uppercase tracking-wide">
+                                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                                {lang === "sw" ? "Thibitisha Malipo ya Simu" : "Confirm Mobile Payment"}
+                              </p>
+                              <p className="text-[11px] text-amber-700/80 mb-3 font-medium">
+                                {lang === "sw" ? "Ingiza msimbo wa muamala wa M-Pesa au Tigo Pesa." : "Enter your mobile money transaction code."}
+                              </p>
+                              <div className="flex flex-col gap-2 relative z-10">
+                                <input
+                                  type="text"
+                                  placeholder={lang === "sw" ? "Msimbo (Mf. PK812...)" : "Ref (e.g. PK812...)"}
+                                  className="w-full min-h-[48px] bg-white border border-amber-200 text-slate-900 px-4 rounded-xl text-sm font-mono font-bold uppercase focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all placeholder:normal-case placeholder:font-sans placeholder:font-medium placeholder:text-slate-400 shadow-xs pointer-events-auto"
+                                  onKeyDown={async (e) => {
+                                    e.stopPropagation();
+                                    if (e.key === "Enter") {
+                                      const val = (e.target).value.trim();
+                                      if (!val) return;
+                                      try {
+                                        await db.saveOrder({ id: o.id, paymentReference: val.toUpperCase() });
+                                        showAlert(lang === "sw" ? "Imewasilishwa kikamilifu" : "Submitted successfully", "success");
+                                        if (onRefresh) onRefresh();
+                                      } catch (err) {
+                                        showAlert("Error: " + err.message, "error");
+                                      }
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <div className="text-[9px] text-amber-600/80 font-bold uppercase tracking-wider text-left pl-1">
+                                  {lang === "sw" ? "Bonyeza Enter Kuhifadhi" : "Press Enter to Save"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Tracker & Actions */}
+                        <div className="lg:w-72 flex flex-col gap-4 border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-6 shrink-0 relative z-10">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <Clock size={14} /> {lang === "sw" ? "Mwelekeo wa Oda" : "Order Tracking"}
+                          </h4>
+                          
+                          <div className="flex flex-col gap-3 py-2">
+                            {[
+                              { step: "CREATED", labelEn: "Order Placed", labelSw: "Oda Imewekwa", active: true },
+                              { step: "PROCESSING", labelEn: "Processing", labelSw: "Inaandaliwa", active: ["PAYMENT_HELD", "PROCESSING", "SHIPPED", "DELIVERED", "BUYER_CONFIRMED", "RELEASED"].includes(statusUpper) },
+                              { step: "SHIPPED", labelEn: "Shipped", labelSw: "Iko Njiani", active: ["SHIPPED", "DELIVERED", "BUYER_CONFIRMED", "RELEASED"].includes(statusUpper) },
+                              { step: "DELIVERED", labelEn: "Delivered", labelSw: "Imefika Mkononi", active: ["DELIVERED", "BUYER_CONFIRMED", "RELEASED"].includes(statusUpper) }
+                            ].map((s, i) => (
+                              <div key={i} className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${s.active ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-300"}`}>
+                                   {s.active ? <Check size={12} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />}
+                                </div>
+                                <span className={`text-xs font-bold ${s.active ? "text-slate-800" : "text-slate-400"}`}>{lang === "sw" ? s.labelSw : s.labelEn}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-col gap-2.5 mt-auto pt-4 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTrackOrderId(o.id);
+                                setTab("track");
+                                handleTrackSearch(o.id);
+                              }}
+                              className="w-full min-h-[44px] bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider pointer-events-auto"
+                            >
+                              <MapPin size={16} />
+                              {lang === "sw" ? "Ramani na Ufuatiliaji" : "Live Map Tracking"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); onViewInvoice(o); }}
+                              className="w-full min-h-[44px] bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 cursor-pointer pointer-events-auto"
+                            >
+                              <Package size={16} />
+                              {lang === "sw" ? "Angalia Ankara (Invoice)" : "View Order Invoice"}
+                            </button>
+                            
+                            {["DELIVERED", "SHIPPED"].includes(statusUpper) && (
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const confirmChoice = await showConfirm(
+                                    lang === "sw"
+                                      ? "Je, unathibitisha kupokea mzigo?"
+                                      : "Confirm receipt of delivery?",
+                                    lang === "sw" ? "Thibitisha" : "Confirm"
+                                  );
+                                  if (confirmChoice) {
+                                    try {
+                                      await db.saveOrder({ ...o, status: "BUYER_CONFIRMED" });
+                                      setLocalOrders((prev) => prev.map(po => po.id === o.id ? { ...po, status: "BUYER_CONFIRMED" } : po));
+                                    } catch (err) {}
+                                  }
+                                }}
+                                className="w-full min-h-[44px] mt-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-xl text-[11px] font-black transition-all shadow-emerald-500/20 shadow-lg active:scale-95 flex items-center justify-center gap-2 animate-pulse cursor-pointer uppercase tracking-wider pointer-events-auto"
+                              >
+                                <Check size={18} className="stroke-[3]" />
+                                {lang === "sw" ? "Thibitisha Mzigo" : "Confirm Delivery"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
