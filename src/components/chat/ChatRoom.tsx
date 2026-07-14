@@ -22,10 +22,11 @@ import {
   Compass,
   Image,
   Smile,
+  Search,
   X,
   Menu
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { ChatMessage, Conversation } from "../../types";
 import { apiFetch } from "../../lib/db";
 import { sendChatMessage, deleteConversationMessages } from "../../lib/chat";
@@ -64,6 +65,8 @@ export function ChatRoom({
   onDeleted?: () => void;
   currentUserName?: string;
 }) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [inputText, setInputText] = useState("");
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [tagQuery, setTagQuery] = useState("");
@@ -1210,7 +1213,16 @@ export function ChatRoom({
           </div>
           
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
-
+            <button
+              onClick={() => {
+                setIsSearchOpen(!isSearchOpen);
+                if (isSearchOpen) setSearchQuery("");
+              }}
+              className={`p-1.5 rounded-xl transition-all active:scale-95 shrink-0 ${isSearchOpen ? "bg-indigo-100 text-indigo-700" : "hover:bg-slate-100 text-slate-500 hover:text-slate-700"}`}
+              title={lang === "sw" ? "Tafuta" : "Search"}
+            >
+              <Search size={16} />
+            </button>
             {(currentUserRole === "admin" || currentUserRole === "seller") && (
               <button
                 onClick={handleMarkResolved}
@@ -1282,6 +1294,40 @@ export function ChatRoom({
         </div>
       )}
 
+      {/* Search Bar area */}
+      <AnimatePresence>
+        {isSearchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden bg-slate-50 border-b border-slate-200 shrink-0"
+          >
+            <div className="p-2 sm:p-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder={lang === "sw" ? "Tafuta ujumbe..." : "Search messages..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-8 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-400"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md hover:bg-slate-100"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Messages Area */}
       <div 
         className="flex-1 overflow-y-auto p-4 space-y-4 relative"
@@ -1291,6 +1337,21 @@ export function ChatRoom({
         }}
       >
         {messages.length === 0 ? (
+          searchQuery ? (
+            <div className="flex flex-col items-center justify-center h-full py-8 text-center px-4 max-w-sm mx-auto opacity-70">
+              <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-4">
+                <Search size={24} />
+              </div>
+              <h4 className="font-extrabold text-slate-700 text-sm mb-1.5">
+                {lang === "sw" ? "Hakuna matokeo" : "No results found"}
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {lang === "sw" 
+                  ? `Hakuna ujumbe wenye neno "${searchQuery}"` 
+                  : `No messages matching "${searchQuery}"`}
+              </p>
+            </div>
+          ) : (
           <div className="flex flex-col items-center justify-center h-full py-8 text-center px-4 max-w-sm mx-auto">
             <div className="w-14 h-14 bg-indigo-600/10 rounded-full flex items-center justify-center text-indigo-600 mb-4 animate-pulse">
               <MessageSquare size={24} />
@@ -1317,6 +1378,7 @@ export function ChatRoom({
               ))}
             </div>
           </div>
+          )
         ) : (
           messages.map((msg, idx) => {
             const isMe = msg.senderId === currentUserId;
