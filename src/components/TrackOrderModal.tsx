@@ -1,0 +1,1120 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  X, 
+  Search, 
+  Package, 
+  Clock, 
+  CheckCircle2, 
+  Sparkles, 
+  Check, 
+  Truck, 
+  MapPin, 
+  FileText, 
+  ShieldCheck, 
+  Coins, 
+  ArrowRight,
+  Navigation,
+  Phone
+} from 'lucide-react';
+import { db, apiFetch } from '../lib/db';
+import { Order, OrderStatusLog } from '../types';
+import { formatCurrency } from '../lib/storage';
+
+const getSafePaymentProofs = (): Record<string, any> => {
+  try {
+    const val = localStorage.getItem("orbi_payment_proofs");
+    const parsed = val ? JSON.parse(val) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+function parseHubStatus(riderVehicle: string | undefined) {
+  if (!riderVehicle || !riderVehicle.startsWith("HUB_STATUS:")) return null;
+  const parts = riderVehicle.split("||");
+  let hubStatus = "";
+  let hubNotes = "";
+  let palletId = "";
+  let shipmentDetails = "";
+
+  parts.forEach(part => {
+    if (part.startsWith("HUB_STATUS:")) {
+      hubStatus = part.replace("HUB_STATUS:", "");
+    } else if (part.startsWith("NOTES:")) {
+      hubNotes = part.replace("NOTES:", "");
+    } else if (part.startsWith("PALL:")) {
+      palletId = part.replace("PALL:", "");
+    } else if (part.startsWith("SHIP:")) {
+      shipmentDetails = part.replace("SHIP:", "");
+    }
+  });
+
+  return { hubStatus, hubNotes, palletId, shipmentDetails };
+}
+
+interface Props {
+  onClose: () => void;
+  lang?: string;
+}
+
+export default function TrackOrderModal({ onClose, lang = "sw" }: Props) {
+  const [orderId, setOrderId] = useState('');
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const normalizeOrderStatus = (status: string | undefined): string => {
+    if (!status) return 'pending';
+    const s = status.toUpperCase();
+    if (s === "CREATED" || s === "AWAITING_PAYMENT" || s === "PENDING") return "pending";
+    if (s === "PAYMENT_HELD" || s === "PROCESSING" || s === "CONFIRMED") return "confirmed";
+    if (s === "SHIPPED") return "shipped";
+    if (s === "DELIVERED") return "delivered";
+    if (s === "CUSTOMER_CONFIRMED" || s === "BUYER_CONFIRMED" || s === "RELEASED" || s === "ARCHIVED") return "customer_confirmed";
+    if (s === "CANCELLED" || s === "REFUNDED") return "cancelled";
+    return status.toLowerCase();
+  };
+
+  const performTracking = async (idToTrack: string) => {
+    if (!idToTrack.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const orders = await db.getOrders();
+      const cleanId = idToTrack.trim().toUpperCase();
+      const cleanNumeric = cleanId.replace(/^ORD-/, '').split('-')[0]; // extracts '12345' from 'ORD-12345-system' or '12345'
+      
+      const foundOrder = orders.find(o => {
+        const orderIdUpper = o.id.toUpperCase();
+        const legacyIdUpper = ((o as any).legacy_id || "").toUpperCase();
+        
+        return orderIdUpper === cleanId || 
+               legacyIdUpper === cleanId || 
+               legacyIdUpper.startsWith(cleanId) ||
+               legacyIdUpper.includes(cleanNumeric) ||
+               orderIdUpper.includes(cleanNumeric);
+      });
+      
+      if (foundOrder) {
+        setOrder({
+          ...foundOrder,
+          status: normalizeOrderStatus(foundOrder.status) as any
+        });
+      } else {
+        setError("Oda haijapatikana. Hakikisha Namba ya Oda (e.g. ORD-XXXXX) ni sahihi.");
+      }
+    } catch (e) {
+      setError("Imeshindikana kutafuta oda. Jaribu tena.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let orderParam = params.get('order') || params.get('order_id');
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    if (!orderParam && pathParts[0] === 'track' && pathParts.length >= 2) {
+      orderParam = pathParts[1];
+    }
+    if (orderParam) {
+      setOrderId(orderParam);
+      performTracking(orderParam);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!order?.id) return;
+    
+    const intervalId = setInterval(async () => {
+      try {
+        const dbOrders = await db.getOrders();
+        const fresh = dbOrders.find(o => o.id === order.id);
+        if (fresh) {
+          const normStatus = normalizeOrderStatus(fresh.status);
+          if (
+            normStatus !== order.status || 
+            fresh.paymentReference !== order.paymentReference || 
+            JSON.stringify(fresh.riderName) !== JSON.stringify(order.riderName) ||
+            fresh.riderPhone !== order.riderPhone ||
+            fresh.riderVehicle !== order.riderVehicle
+          ) {
+            setOrder({
+              ...fresh,
+              status: normStatus as any
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("TrackOrderModal background polling failed:", e);
+      }
+    }, 5000); // Poll every 5 seconds for updates
+    
+    return () => clearInterval(intervalId);
+  }, [order?.id, order?.status, order?.paymentReference, order?.riderName, order?.riderPhone, order?.riderVehicle]);
+  
+  // Highlight states when status changes
+  const [highlightStatus, setHighlightStatus] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
+
+  // Option 2: Payment proof state
+  const [localTxId, setLocalTxId] = useState('');
+  const [paymentSubmittedLocally, setPaymentSubmittedLocally] = useState(false);
+  const [showSMSArea, setShowSMSArea] = useState(false);
+  const [smsText, setSmsText] = useState('');
+  const [isOcrParsing, setIsOcrParsing] = useState(false);
+  const [storedProof, setStoredProof] = useState<any>(null);
+
+  // Automated live verification states
+  const [isVerifyingAuto, setIsVerifyingAuto] = useState(false);
+  const [verificationSteps, setVerificationSteps] = useState<{ id: string; label: string; status: 'pending' | 'loading' | 'success' | 'failed' }[]>([]);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+
+  const [logs, setLogs] = useState<OrderStatusLog[]>([]);
+
+  useEffect(() => {
+    async function loadLogs() {
+      if (!order?.id) {
+        setLogs([]);
+        return;
+      }
+      try {
+        const fetched = await db.getOrderLogs(order.id);
+        setLogs(fetched || []);
+      } catch (err) {
+        console.warn("Failed to load tracking order logs:", err);
+      }
+    }
+    loadLogs();
+  }, [order?.id, order?.status]);
+
+  const getStageTimestamp = (statusName: string): number | null => {
+    if (statusName === 'pending') return order?.date || null;
+    const matchedLog = logs.find(l => l.newStatus === statusName);
+    if (matchedLog) return matchedLog.createdAt;
+    
+    const orderOfStatuses = ['pending', 'confirmed', 'customer_confirmed', 'shipped', 'delivered'];
+    const currentIdx = orderOfStatuses.indexOf(order?.status || 'pending');
+    const targetIdx = orderOfStatuses.indexOf(statusName);
+    
+    if (currentIdx >= targetIdx && targetIdx > 0 && order?.date) {
+      return order.date + (targetIdx * 30 * 60 * 1000);
+    }
+    return null;
+  };
+
+  const formatStageTime = (statusName: string) => {
+    const ts = getStageTimestamp(statusName);
+    if (!ts) return null;
+    return new Date(ts).toLocaleString(lang === "sw" ? "sw-TZ" : "en-US", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  const getDispatchStatus = (statusName: string) => {
+    const matchedLog = logs.find(l => l.newStatus === statusName);
+    if (matchedLog && matchedLog.notificationStatus) {
+      return matchedLog.notificationStatus;
+    }
+    return null;
+  };
+
+  const getDispatchStatusUI = (statusName: string) => {
+    const dispatchStr = getDispatchStatus(statusName);
+    if (!dispatchStr) return null;
+    return (
+      <span className="text-[8px] bg-sky-100 text-sky-700 font-mono font-bold rounded px-1.5 py-0.5 mt-1 inline-block border border-sky-200">
+        ✉️ {dispatchStr}
+      </span>
+    );
+  };
+
+  useEffect(() => {
+    if (order) {
+      if (prevStatusRef.current && prevStatusRef.current !== order.status) {
+        setHighlightStatus(true);
+        setStatusMessage(`Hali imebadilika: ${prevStatusRef.current.toUpperCase()} ➜ ${order.status.toUpperCase()}!`);
+        const timer = setTimeout(() => {
+          setHighlightStatus(false);
+        }, 5000);
+        return () => clearTimeout(timer);
+      }
+      prevStatusRef.current = order.status;
+      
+      // Load any existing proof
+      const displayId = (order as any).legacy_id || order.id;
+      const proofs = getSafePaymentProofs();
+      if (order.paymentReference) {
+        setStoredProof({
+          transactionId: order.paymentReference,
+          timestamp: Date.now(),
+          amount: order.total,
+          method: order.payment_method_name || order.payment_method || "Mobile",
+          status: "pending_verification"
+        });
+        setPaymentSubmittedLocally(true);
+      } else if (proofs[displayId]) {
+        setStoredProof(proofs[displayId]);
+        setPaymentSubmittedLocally(true);
+      } else {
+        setStoredProof(null);
+        setPaymentSubmittedLocally(false);
+      }
+    } else {
+      prevStatusRef.current = null;
+    }
+  }, [order?.status, order?.id, paymentSubmittedLocally]);
+
+  const handleTrack = async () => {
+    if (!orderId.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const orders = await db.getOrders();
+      const cleanId = orderId.trim().toUpperCase();
+      const cleanNumeric = cleanId.replace(/^ORD-/, '').split('-')[0];
+      
+      const foundOrder = orders.find(o => {
+        const orderIdUpper = o.id.toUpperCase();
+        const legacyIdUpper = ((o as any).legacy_id || "").toUpperCase();
+        
+        return orderIdUpper === cleanId || 
+               legacyIdUpper === cleanId || 
+               legacyIdUpper.startsWith(cleanId) ||
+               legacyIdUpper.includes(cleanNumeric) ||
+               orderIdUpper.includes(cleanNumeric);
+      });
+      
+      if (foundOrder) {
+        setOrder({
+          ...foundOrder,
+          status: normalizeOrderStatus(foundOrder.status) as any
+        });
+      } else {
+        setError("Oda haijapatikana. Hakikisha Namba ya Oda (e.g. ORD-XXXXX) ni sahihi.");
+      }
+    } catch (e) {
+      setError("Imeshindikana kutafuta oda. Jaribu tena.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualProofSubmit = async () => {
+    if (!localTxId.trim() || !order) return;
+    const displayId = (order as any).legacy_id || order.id;
+    const proofs = getSafePaymentProofs();
+    const data = {
+      transactionId: localTxId.trim().toUpperCase(),
+      timestamp: Date.now(),
+      amount: order.total,
+      method: order.payment_method_name || order.payment_method || "Mobile",
+      status: "pending_verification"
+    };
+    proofs[displayId] = data;
+    localStorage.setItem("orbi_payment_proofs", JSON.stringify(proofs));
+    setStoredProof(data);
+    setPaymentSubmittedLocally(true);
+    try {
+      await db.saveOrder({ id: order.id, paymentReference: localTxId.trim().toUpperCase() });
+      setOrder({ ...order, paymentReference: localTxId.trim().toUpperCase() });
+    } catch (e) {
+      console.error("Failed to save payment reference to DB:", e);
+    }
+  };
+
+  const handleAutoVerification = async () => {
+    if (!localTxId.trim() || !order) return;
+    const txId = localTxId.trim().toUpperCase();
+    
+    setIsVerifyingAuto(true);
+    setVerificationError(null);
+    
+    // Set up initial steps in "pending" status
+    const initialSteps = [
+      { id: "carrier_connect", label: lang === "sw" ? "Inaunganisha na Mtandao wa Simu..." : "Connecting to carrier network...", status: "loading" as const },
+      { id: "ledger_lookup", label: lang === "sw" ? `Inatafuta muamala ${txId} kwenye leja...` : `Querying Transaction ID: ${txId} in ledger...`, status: "pending" as const },
+      { id: "amount_verify", label: lang === "sw" ? `Inahakiki kiasi cha TZS ${formatCurrency(order.total)}...` : `Verifying payment amount: TZS ${formatCurrency(order.total)}...`, status: "pending" as const },
+      { id: "escrow_hold", label: lang === "sw" ? "Inatenga Fedha Kwenye Escrow ya PaySafe..." : "Securing funds in Orbi PaySafe Escrow...", status: "pending" as const },
+      { id: "order_update", label: lang === "sw" ? "Inasajili na kukamilisha oda..." : "Finalizing order state in secure ledger...", status: "pending" as const }
+    ];
+    setVerificationSteps(initialSteps);
+
+    // Fire the API call immediately in background, but step through animations to tell the story
+    let apiCompleted = false;
+    let apiSuccess = false;
+    let apiErrorMsg = "";
+
+    apiFetch('/api/v1/payments/verify-payment-auto', {
+      method: 'POST',
+      body: JSON.stringify({ orderId: order.id, transactionId: txId })
+    }).then((res) => {
+      apiCompleted = true;
+      if (res && res.success) {
+        apiSuccess = true;
+      } else {
+        apiSuccess = false;
+        apiErrorMsg = res.message || (lang === "sw" ? "Mchakato wa kuhakiki umeshindikana." : "Verification failed.");
+      }
+    }).catch((err) => {
+      apiCompleted = true;
+      apiSuccess = false;
+      apiErrorMsg = err.message || (lang === "sw" ? "Mchakato wa kuhakiki umeshindikana." : "Verification failed.");
+    });
+
+    const updateStepStatus = (stepId: string, status: 'loading' | 'success' | 'failed') => {
+      setVerificationSteps(prev => prev.map(s => s.id === stepId ? { ...s, status } : s));
+    };
+
+    try {
+      // Step 1: Connecting
+      await new Promise(resolve => setTimeout(resolve, 800));
+      updateStepStatus("carrier_connect", "success");
+      updateStepStatus("ledger_lookup", "loading");
+
+      // Step 2: Ledger Lookup
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (apiCompleted && !apiSuccess) {
+        updateStepStatus("ledger_lookup", "failed");
+        throw new Error(apiErrorMsg);
+      }
+      updateStepStatus("ledger_lookup", "success");
+      updateStepStatus("amount_verify", "loading");
+
+      // Step 3: Amount verify
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (apiCompleted && !apiSuccess) {
+        updateStepStatus("amount_verify", "failed");
+        throw new Error(apiErrorMsg);
+      }
+      updateStepStatus("amount_verify", "success");
+      updateStepStatus("escrow_hold", "loading");
+
+      // Step 4: Escrow Hold
+      await new Promise(resolve => setTimeout(resolve, 800));
+      if (apiCompleted && !apiSuccess) {
+        updateStepStatus("escrow_hold", "failed");
+        throw new Error(apiErrorMsg);
+      }
+      updateStepStatus("escrow_hold", "success");
+      updateStepStatus("order_update", "loading");
+
+      // Step 5: Order update
+      let attempts = 0;
+      while (!apiCompleted && attempts < 15) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+        attempts++;
+      }
+
+      if (!apiSuccess) {
+        updateStepStatus("order_update", "failed");
+        throw new Error(apiErrorMsg || (lang === "sw" ? "Uhakiki umeshindwa kwenye duka." : "Verification failed at ledger update."));
+      }
+
+      updateStepStatus("order_update", "success");
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      // Successfully verified!
+      const displayId = (order as any).legacy_id || order.id;
+      const proofs = getSafePaymentProofs();
+      const data = {
+        transactionId: txId,
+        timestamp: Date.now(),
+        amount: order.total,
+        method: order.payment_method_name || order.payment_method || "Mobile Money",
+        status: "confirmed"
+      };
+      proofs[displayId] = data;
+      localStorage.setItem("orbi_payment_proofs", JSON.stringify(proofs));
+      setStoredProof(data);
+      setPaymentSubmittedLocally(true);
+
+      // Reload fresh order details
+      setOrder(prev => prev ? { 
+        ...prev, 
+        status: "confirmed" as any, 
+        paymentReference: txId,
+        payment_method_name: "ORBI PaySafe"
+      } : null);
+
+      setIsVerifyingAuto(false);
+    } catch (err: any) {
+      console.error("Auto verification flow failed:", err);
+      setVerificationError(err.message || "An error occurred during verification.");
+      setIsVerifyingAuto(false);
+    }
+  };
+
+  const handleSmsOcrParse = () => {
+    if (!smsText.trim()) return;
+    setIsOcrParsing(true);
+    setTimeout(() => {
+      const match = smsText.match(/\b([A-Z0-9]{10,12})\b/i);
+      if (match) {
+        setLocalTxId(match[1].toUpperCase());
+      } else {
+        const fallback = smsText.match(/\b([A-Z0-9]{8,15})\b/i);
+        if (fallback) {
+          setLocalTxId(fallback[1].toUpperCase());
+        }
+      }
+      setIsOcrParsing(false);
+      setShowSMSArea(false);
+    }, 850);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white w-full h-full sm:rounded-3xl sm:shadow-2xl sm:max-w-lg sm:max-h-[92vh] flex flex-col relative animate-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-5 border-b border-slate-100 sm:rounded-t-3xl">
+          <div>
+            <h2 className="font-extrabold text-lg text-slate-800 tracking-tight flex items-center gap-2">
+              <span className="p-1 px-2.5 bg-orange-500 text-white rounded-xl text-sm font-black">ORBI</span>
+              <span>Fuatilia Oda (Express Tracker)</span>
+            </h2>
+            <p className="text-[10px] text-slate-400 font-medium">Uhakiki wa Malipo & Ramani ya Dereva katika Alama ya Orange</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-50 transition cursor-pointer">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {!order ? (
+            <div className="space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3 text-amber-900 text-xs font-semibold leading-relaxed">
+                <div className="text-lg">📦</div>
+                <div>
+                  <p className="font-bold text-amber-950">Weka Namba ya Oda Iliyotolewa</p>
+                  <p className="text-slate-600 font-normal mt-0.5">Ingiza namba ya muamala kuanza na <strong>ORD-...</strong> au UUID kuangalia hali halisi mnyororo mzima wa kufikishiwa mzigo wako.</p>
+                </div>
+              </div>
+
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="Mfano: ORD-12345-system au ID yako" 
+                  value={orderId} 
+                  onChange={e => setOrderId(e.target.value)}
+                  className="w-full p-4 pl-5 border border-slate-200 rounded-2xl outline-none focus:border-orange-500 font-mono text-sm tracking-wide font-black uppercase text-slate-800"
+                />
+              </div>
+              <button 
+                onClick={handleTrack}
+                disabled={loading}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white p-4 rounded-2xl font-black transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-orange-500/15 text-sm uppercase tracking-wider"
+              >
+                {loading ? 'Inatafuta...' : <><Search size={18}/> Fuatilia Sasa</>}
+              </button>
+              {error && <p className="text-red-500 text-xs font-semibold text-center mt-2">{error}</p>}
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in slide-in-from-bottom-4">
+               
+               {/* Change Alert banner */}
+               {statusMessage && (
+                 <div className="p-3 bg-amber-50 border border-amber-200/50 rounded-xl text-[11px] font-black text-amber-800 flex items-center gap-2 animate-bounce">
+                   <Sparkles size={14} className="text-orange-500 animate-spin" />
+                   <span>{statusMessage}</span>
+                 </div>
+               )}
+
+               {/* Top Badge Card */}
+               <div 
+                 className={`flex justify-between items-center p-4 rounded-2xl border-2 transition-all duration-700 ease-in-out ${
+                   highlightStatus 
+                     ? "bg-amber-50/90 border-amber-500 shadow-md scale-[1.01]" 
+                     : order.status === "shipped"
+                       ? "bg-amber-50 border-orange-200 text-orange-950"
+                       : order.status === "confirmed"
+                         ? "bg-emerald-50 border-emerald-100 text-emerald-950"
+                         : "bg-slate-50 border-slate-100 text-slate-900"
+                 }`}
+               >
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block font-mono">
+                      Oda ID: <span className="text-slate-700 font-black">{order.id.slice(0, 8).toUpperCase()}</span>
+                    </span>
+                    <p className={`font-black text-lg transition-all mt-1 uppercase duration-300 ${
+                      order.status === "shipped" 
+                        ? "text-orange-600" 
+                        : order.status === "customer_confirmed"
+                          ? "text-indigo-600"
+                          : order.status === "confirmed" 
+                            ? "text-emerald-700" 
+                            : "text-amber-600"
+                    }`}>
+                      {order.status === "pending" && (paymentSubmittedLocally ? "Malipo Chini ya Uhakiki ⏳" : "Malipo Yanasubiriwa 💳")}
+                      {order.status === "confirmed" && "Imeidhinishwa Na Duka 📦"}
+                      {order.status === "customer_confirmed" && "Mteja Amethibitisha 📞"}
+                      {order.status === "shipped" && "Mzigo Uko Njiani (Transit) 🚚"}
+                      {order.status === "delivered" && "Imepokelewa (Delivered) 🎉"}
+                      {order.status === "cancelled" && "Imeghairiwa (Cancelled) ✕"}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm border border-slate-100">
+                    <Package className={`transition-transform duration-300 ${highlightStatus ? "scale-125 rotate-12 text-amber-500" : order.status === "confirmed" ? "text-emerald-600" : "text-orange-500"}`} size={20} />
+                  </div>
+               </div>
+
+               {/* Hub Consolidation and Cross-Dock Status */}
+               {(() => {
+                 const hubData = parseHubStatus(order.riderVehicle);
+                 if (!hubData) return null;
+                 const { hubStatus, hubNotes, palletId, shipmentDetails } = hubData;
+                 
+                 // Map statuses to steps
+                 const steps = [
+                   { key: "DELIVERED_TO_HUB", labelEn: "Arrived at Hub", labelSw: "Imefika Ghalani" },
+                   { key: "INSPECTED", labelEn: "Quality Check", labelSw: "Ukaguzi Ubora" },
+                   { key: "PALLET_PACKED", labelEn: "Pallet Packed", labelSw: "Kwenye Paleti" },
+                   { key: "SHIPPED", labelEn: "Dispatched", labelSw: "Imesafirishwa" }
+                 ];
+
+                 // Determine active index
+                 let activeIdx = -1;
+                 if (hubStatus === "DELIVERED_TO_HUB") activeIdx = 0;
+                 else if (["PASSED", "FAILED", "RETURNED", "INSPECTED"].includes(hubStatus)) activeIdx = 1;
+                 else if (hubStatus === "PALLET_PACKED") activeIdx = 2;
+                 else if (hubStatus === "SHIPPED") activeIdx = 3;
+
+                 const isSw = lang === "sw";
+
+                 return (
+                   <div className="bg-gradient-to-br from-indigo-50/50 to-slate-50 border border-indigo-100/80 p-5 rounded-3xl space-y-4 shadow-xs">
+                     <div className="flex items-center gap-2">
+                       <span className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm">🏢</span>
+                       <div>
+                         <h4 className="text-xs font-black text-indigo-950 uppercase tracking-widest">
+                           {isSw ? "Kituo cha Usafirishaji wa Pamoja" : "Consolidated Hub Status"}
+                         </h4>
+                         <p className="text-[9px] text-indigo-700 font-bold">
+                           {isSw ? "Oda ya Wauzaji Wengi (Cross-Docked)" : "Multi-Seller Order (Cross-Docked)"}
+                         </p>
+                       </div>
+                     </div>
+
+                     {/* Horizontal mini-stepper */}
+                     <div className="grid grid-cols-4 gap-1 relative pt-2">
+                       {/* Background line */}
+                       <div className="absolute top-[21px] left-[12%] right-[12%] h-[2px] bg-slate-200 z-0"></div>
+                       {/* Active progress bar */}
+                       {activeIdx >= 0 && (
+                         <div 
+                           className="absolute top-[21px] left-[12%] h-[2px] bg-indigo-600 z-0 transition-all duration-500" 
+                           style={{ width: `${(activeIdx / 3) * 76}%` }}
+                         ></div>
+                       )}
+
+                       {steps.map((step, idx) => {
+                         const isCompleted = idx < activeIdx || (idx === activeIdx && hubStatus !== "FAILED" && hubStatus !== "RETURNED");
+                         const isCurrent = idx === activeIdx;
+                         const isFailedState = isCurrent && (hubStatus === "FAILED" || hubStatus === "RETURNED");
+
+                         return (
+                           <div key={step.key} className="flex flex-col items-center text-center relative z-10">
+                             <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] transition-all ${
+                               isFailedState
+                                 ? "bg-red-500 text-white shadow-lg shadow-red-500/20"
+                                 : isCompleted
+                                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                                   : isCurrent
+                                     ? "bg-amber-500 text-white animate-pulse shadow-lg shadow-amber-500/20"
+                                     : "bg-slate-100 text-slate-400 border border-slate-200"
+                             }`}>
+                               {isFailedState ? "✕" : isCompleted ? "✓" : idx + 1}
+                             </div>
+                             <span className={`text-[9px] mt-1.5 font-bold tracking-tight block ${
+                               isFailedState 
+                                 ? "text-red-600" 
+                                 : isCompleted || isCurrent 
+                                   ? "text-indigo-950" 
+                                   : "text-slate-400"
+                             }`}>
+                               {isSw ? step.labelSw : step.labelEn}
+                             </span>
+                           </div>
+                         );
+                       })}
+                     </div>
+
+                     {/* Details & Notes */}
+                     <div className="bg-white border border-slate-100 rounded-2xl p-3.5 space-y-2.5 text-[11px] text-slate-600 font-semibold shadow-xs">
+                       <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                         <span className="text-slate-400">{isSw ? "Hali ya Sasa:" : "Current Hub Status:"}</span>
+                         <span className={`px-2 py-0.5 rounded-full font-mono text-[9px] font-extrabold uppercase ${
+                           hubStatus === "FAILED" || hubStatus === "RETURNED"
+                             ? "bg-red-100 text-red-700 border border-red-200"
+                             : hubStatus === "SHIPPED"
+                               ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                               : "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                         }`}>
+                           {hubStatus === "DELIVERED_TO_HUB" && (isSw ? "Imefika Ghalani" : "Delivered to Hub")}
+                           {hubStatus === "PASSED" && (isSw ? "Imepitishwa (Ubora OK)" : "Inspection Passed")}
+                           {hubStatus === "FAILED" && (isSw ? "Haikupita (Inashughulikiwa)" : "Inspection Failed")}
+                           {hubStatus === "RETURNED" && (isSw ? "Imerudishwa kwa Muuzaji" : "Returned to Seller")}
+                           {hubStatus === "PALLET_PACKED" && (isSw ? "Imepakiwa Kwenye Paleti" : "Pallet Packed & Ready")}
+                           {hubStatus === "SHIPPED" && (isSw ? "Umeondoka Ghalani" : "Shipped from Hub")}
+                         </span>
+                       </div>
+
+                       {/* Hub Activity Checklist */}
+                       <div className="border-b border-slate-100 pb-2.5 pt-1 space-y-2">
+                         <span className="text-slate-400 block text-[10px] uppercase tracking-wider">{isSw ? "Shughuli za Ghalani (Hub activity):" : "Hub activity"}</span>
+                         <div className="space-y-1.5 pl-1 font-mono text-[10px]">
+                           <div className="flex items-center gap-2 text-slate-700">
+                             {activeIdx >= 0 ? <CheckCircle2 size={13} className="text-emerald-500" /> : <X size={13} className="text-slate-300" />}
+                             <span>{isSw ? "Imefika" : "Arrived"}</span>
+                           </div>
+                           <div className="flex items-center gap-2 text-slate-700">
+                             {activeIdx >= 1 && hubStatus !== "FAILED" && hubStatus !== "RETURNED" ? <CheckCircle2 size={13} className="text-emerald-500" /> : <X size={13} className={hubStatus === "FAILED" || hubStatus === "RETURNED" ? "text-red-500" : "text-slate-300"} />}
+                             <span>{isSw ? "Ukaguzi (QA):" : "QA Inspected:"} {activeIdx >= 1 && hubStatus !== "FAILED" && hubStatus !== "RETURNED" ? (isSw ? "Imepita" : "Passes") : (hubStatus === "FAILED" || hubStatus === "RETURNED" ? (isSw ? "Imeshindikana" : "Failed") : (isSw ? "Inasubiri" : "Pending"))}</span>
+                           </div>
+                           <div className="flex items-center gap-2 text-slate-700">
+                             {activeIdx >= 2 ? <CheckCircle2 size={13} className="text-emerald-500" /> : <X size={13} className="text-slate-300" />}
+                             <span>{isSw ? "Imepakiwa" : "Packed"}</span>
+                           </div>
+                         </div>
+                       </div>
+
+                       {palletId && (
+                         <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                           <span className="text-slate-400">{isSw ? "Namba ya Paleti / Sanduku:" : "Pallet / Box ID:"}</span>
+                           <span className="font-mono text-indigo-950 font-black">{palletId}</span>
+                         </div>
+                       )}
+
+                       {shipmentDetails && (
+                         <div className="border-b border-slate-100 pb-2 space-y-1">
+                           <span className="text-slate-400 block">{isSw ? "Maelezo ya Usafirishaji:" : "Consolidated Shipment Details:"}</span>
+                           <p className="text-slate-700 bg-slate-50 p-2 rounded-lg font-mono text-[10px] leading-relaxed border border-slate-100">
+                             {shipmentDetails}
+                           </p>
+                         </div>
+                       )}
+
+                       {hubNotes && (
+                         <div className="space-y-1">
+                           <span className="text-slate-400 block">{isSw ? "Maelezo ya Kituo (Hub Notes):" : "Inspected Notes & Alerts:"}</span>
+                           <p className="text-slate-700 italic bg-amber-50/50 p-2 rounded-lg leading-relaxed border border-amber-100/30">
+                             "{hubNotes}"
+                           </p>
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 );
+               })()}
+
+               {/* Option 1: Dynamic Stepper Timeline Vertical Nodes */}
+               <div className="bg-slate-50/50 border border-slate-100 p-5 rounded-3xl space-y-4">
+                 <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b pb-2">Mchakato wa Kusafirisha (Timeline)</h4>
+                 
+                 <div className="relative pl-6 space-y-6">
+                   {/* Continuous line */}
+                   <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200"></div>
+
+                   {/* Step 1: Placed */}
+                   <div className="relative flex gap-3 text-xs">
+                     <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                       ✓
+                     </div>
+                     <div>
+                       <div className="flex justify-between items-start gap-2 w-full">
+                          <p className="font-extrabold text-slate-800">Oda Yako Imesajiliwa</p>
+                          <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono shrink-0">
+                            {formatStageTime('pending')}
+                          </span>
+                        </div>
+                       <p className="text-[10px] text-slate-500">Mteja ametoa agizo tayari na limewekwa kwenye foleni.</p>
+                       {getDispatchStatusUI('CREATED') || getDispatchStatusUI('PENDING')}
+                     </div>
+                   </div>
+
+                   {/* Step 2: Approved / Verification */}
+                   <div className="relative flex gap-3 text-xs">
+                     {["confirmed", "customer_confirmed", "shipped", "delivered"].includes(order.status) ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         ✓
+                       </div>
+                     ) : order.status === "cancelled" ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         ✕
+                       </div>
+                     ) : (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-amber-500 animate-pulse text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         •
+                       </div>
+                     )}
+                     <div>
+                                               <p className="font-extrabold text-slate-800 flex items-center justify-between gap-1.5 w-full">
+                         <span>Imeidhinishwa na Duka</span>
+                          {["confirmed", "customer_confirmed", "shipped", "delivered"].includes(order.status) && (
+                            <span className="font-mono text-[9px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded shrink-0">
+                              {formatStageTime('confirmed')}
+                            </span>
+                          )}
+                         {paymentSubmittedLocally && (
+                           <span className="bg-orange-500/10 text-orange-600 font-mono font-black border border-orange-500/20 rounded px-1 text-[8px]">
+                             ID: {storedProof?.transactionId || localTxId}
+                           </span>
+                         )}
+                       </p>
+                       <p className="text-[10px] text-slate-500">
+                         {["confirmed", "customer_confirmed", "shipped", "delivered"].includes(order.status)
+                           ? "Oda imethibitishwa na duka na ufungashaji umeanza." 
+                           : paymentSubmittedLocally 
+                             ? "Mteja amewasilisha namba ya muamala. Foleni ya ukaguzi ya Orbi inafanyia kazi sasa." 
+                             : "Mteja hajawasilisha namba ya muamala bado."}
+                       </p>
+                       {getDispatchStatusUI('PAYMENT_HELD') || getDispatchStatusUI('CONFIRMED')}
+                     </div>
+                   </div>
+
+                   {/* Step 3: Customer Confirmed */}
+                   <div className="relative flex gap-3 text-xs">
+                     {["customer_confirmed", "shipped", "delivered"].includes(order.status) ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         ✓
+                       </div>
+                     ) : order.status === "confirmed" ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-amber-500 animate-pulse text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         📞
+                       </div>
+                     ) : (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-slate-200 border-2 border-white text-slate-400 flex items-center justify-center text-[9px]"></div>
+                     )}
+                     <div>
+                       <div className="flex justify-between items-start gap-2 w-full">
+                          <p className="font-extrabold text-slate-800">Uthibitisho wa Mteja (Customer Confirmed)</p>
+                          {["customer_confirmed", "shipped", "delivered"].includes(order.status) && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono shrink-0">
+                              {formatStageTime('customer_confirmed')}
+                            </span>
+                          )}
+                        </div>
+                       <p className="text-[10px] text-slate-500">
+                         {["customer_confirmed", "shipped", "delivered"].includes(order.status)
+                           ? "Mteja amethibitisha na kukubaliana na muuzaji, tayari kuanza usafiri." 
+                           : order.status === 'confirmed' 
+                             ? "Muuzaji anapiga simu/WhatsApp ili uweze kuthibitisha oda yako haraka." 
+                             : "Inasubiri kuidhinishwa kwanza na duka kabla ya wasilisho kufanyika."}
+                       </p>
+                       {getDispatchStatusUI('BUYER_CONFIRMED') || getDispatchStatusUI('CUSTOMER_CONFIRMED')}
+                     </div>
+                   </div>
+
+                   {/* Step 4: Dispatched / Transit */}
+                   <div className="relative flex gap-3 text-xs">
+                     {["shipped", "delivered"].includes(order.status) ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         ✓
+                       </div>
+                     ) : order.status === "customer_confirmed" ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-orange-500 animate-[bounce_1s_infinite] text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         🚚
+                       </div>
+                     ) : (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-slate-200 border-2 border-white text-slate-400 flex items-center justify-center text-[9px]"></div>
+                     )}
+                     <div className="w-full">
+                       <p className="font-extrabold text-slate-800 flex items-center justify-between">
+                         <span className="flex items-center gap-1.5">
+                            <span>Mzigo Uko Njiani (Transit)</span>
+                            {["shipped", "delivered"].includes(order.status) && (
+                              <span className="font-mono text-[9px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded shrink-0">
+                                {formatStageTime('shipped')}
+                              </span>
+                            )}
+                          </span>
+                         {order.status === 'shipped' && (
+                           <span className="text-[8px] bg-orange-600 text-white font-mono rounded px-1 animate-pulse">LIVE MPYA</span>
+                         )}
+                       </p>
+                       <p className="text-[10px] text-slate-500">
+                         {order.status === 'shipped' || order.status === 'delivered'
+                           ? (order.riderName 
+                                ? `${lang === "sw" ? "Msafirishaji wetu" : "Our rider"} ${order.riderName}${order.riderPhone ? " (" + order.riderPhone + ")" : ""}${order.riderVehicle ? " na chombo " + order.riderVehicle : ""} ${lang === "sw" ? "yuko njiani kuleta mzigo." : "is on the way to deliver your package."}`
+                                : (lang === "sw" ? "Msafirishaji wetu yuko njiani kuleta mzigo." : "Our courier is on the way to deliver your package.")) 
+                           : "Mzigo utapewa msafirishaji ukikamilika kufungwa na mteja kuthibitishwa."}
+                       </p>
+                       {getDispatchStatusUI('SHIPPED')}
+
+                       {order.status === 'shipped' && (
+                         <div className="mt-3 bg-slate-900 border border-slate-800 text-white p-3.5 rounded-2xl relative overflow-hidden space-y-2 shadow-inner">
+                           <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
+                             <span className="flex items-center gap-1">
+                               <Navigation size={10} className="text-orange-500 animate-spin" />
+                               Dar es Salaam Hub ➜ {order.customer_address ? order.customer_address.slice(0, 18) : "Mteja"}...
+                             </span>
+                             <span className="text-orange-400">Dakika 25 zimebaki</span>
+                           </div>
+
+                           <div className="h-16 relative bg-slate-950 rounded-xl overflow-hidden border border-white/5 flex items-center justify-center">
+                             <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:12px_12px] opacity-40"></div>
+                             
+                             <svg className="absolute inset-0 w-full h-full" viewBox="0 0 280 64">
+                               <path 
+                                 d="M 30,32 Q 140,10 250,32" 
+                                 fill="none" 
+                                 stroke="rgba(251,191,36,0.15)" 
+                                 strokeWidth="3" 
+                               />
+                               <path 
+                                 d="M 30,32 Q 140,10 250,32" 
+                                 fill="none" 
+                                 stroke="#f97316" 
+                                 strokeWidth="2" 
+                                 strokeDasharray="4 4" 
+                                 className="animate-[dash_10s_linear_infinite]"
+                               />
+                             </svg>
+
+                             <div className="absolute left-6 top-6 grid place-items-center">
+                               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping absolute"></div>
+                               <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white relative z-10"></div>
+                               <span className="text-[8px] text-white/50 font-mono mt-0.5">Mtoza</span>
+                             </div>
+
+                             <div className="absolute left-[135px] top-[14px] flex flex-col items-center animate-bounce">
+                               <span className="text-sm">🚚</span>
+                               <span className="bg-orange-500 text-[7px] text-white px-1.5 rounded-sm font-black uppercase font-mono leading-none py-0.5 max-w-[80px] truncate" title={order.riderName}>{order.riderName || (lang === "sw" ? "Msafirishaji" : "Courier")}</span>
+                             </div>
+
+                             <div className="absolute right-6 top-6 flex flex-col items-center">
+                               <MapPin size={12} className="text-orange-500 animate-bounce" />
+                               <span className="text-[8px] text-orange-400 font-extrabold mt-0.5">Wewe</span>
+                             </div>
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   </div>
+
+                   {/* Step 5: Delivered & Confirmed */}
+                   <div className="relative flex gap-3 text-xs">
+                     {order.status === 'delivered' ? (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow border-2 border-white">
+                         ✓
+                       </div>
+                     ) : (
+                       <div className="absolute -left-[21px] w-4.5 h-4.5 rounded-full bg-slate-200 border-2 border-white text-slate-400 flex items-center justify-center text-[9px]">
+                         •
+                       </div>
+                     )}
+                     <div>
+                       <div className="flex justify-between items-start gap-2 w-full">
+                          <p className="font-extrabold text-slate-800">Imepokelewa na Kuthibitishwa (Delivered)</p>
+                          {order.status === 'delivered' && (
+                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono shrink-0">
+                              {formatStageTime('delivered')}
+                            </span>
+                          )}
+                        </div>
+                       <p className="text-[10px] text-slate-500">
+                         {order.status === 'delivered'
+                           ? "Mteja amethibitisha kuwa amepokea mzigo wake kikamilifu na salama."
+                           : "Mzigo bado haujafika / unangojea uthibitisho wa kupokelewa na mteja."}
+                       </p>
+                       {getDispatchStatusUI('DELIVERED') || getDispatchStatusUI('RELEASED')}
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+               {/* Option 2: Payment proof block inside Track modal if not cancelled */}
+               {order.status !== "cancelled" && (
+                 <div className="bg-gradient-to-br from-orange-500/5 to-amber-500/10 border border-orange-500/20 p-5 rounded-3xl space-y-3.5">
+                   <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-2">
+                       <span className="text-lg">💰</span>
+                       <div>
+                         <h4 className="text-xs font-black text-slate-800 uppercase tracking-wide">Uhakiki wa Malipo</h4>
+                         <p className="text-[10px] text-slate-500">Boresha uthibitisho wa muamala ili kupata idhini</p>
+                       </div>
+                     </div>
+                   </div>
+
+                   {!paymentSubmittedLocally ? (isVerifyingAuto ? (
+                      <div className="space-y-4 py-1">
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div className="w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent animate-spin shrink-0"></div>
+                          <p className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                            {lang === "sw" ? "Uhakiki wa Kiotomatiki..." : "Automated Verification..."}
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-3 bg-slate-50 border border-slate-100 p-4 rounded-2.5xl">
+                          {verificationSteps.map((step) => (
+                            <div key={step.id} className="flex items-start gap-3 text-xs">
+                              <div className="mt-0.5 shrink-0">
+                                {step.status === 'success' && (
+                                  <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shadow-sm">✓</span>
+                                )}
+                                {step.status === 'loading' && (
+                                  <span className="relative flex h-4 w-4">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 flex items-center justify-center text-[8px] text-white font-bold">•</span>
+                                  </span>
+                                )}
+                                {step.status === 'pending' && (
+                                  <span className="w-4 h-4 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[8px] text-slate-400">○</span>
+                                )}
+                                {step.status === 'failed' && (
+                                  <span className="w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center font-bold text-[9px] shadow-sm">✕</span>
+                                )}
+                              </div>
+                              <p className={`text-[11px] leading-tight font-medium transition-colors ${
+                                step.status === 'success' ? 'text-emerald-700 font-bold' : 
+                                step.status === 'loading' ? 'text-orange-600 font-black' : 
+                                step.status === 'failed' ? 'text-rose-600 font-extrabold' : 'text-slate-400'
+                              }`}>
+                                {step.label}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {verificationError ? (
+                          <div className="space-y-2.5 bg-rose-50 border border-rose-100 text-rose-800 p-4 rounded-2.5xl text-xs font-medium">
+                            <p className="font-extrabold text-rose-700">❌ {lang === "sw" ? "Uhakiki Umeshindikana" : "Verification Failed"}</p>
+                            <p className="text-[10.5px] text-rose-600 leading-relaxed">{verificationError}</p>
+                            <button
+                              onClick={() => {
+                                setIsVerifyingAuto(false);
+                                setVerificationError(null);
+                              }}
+                              className="w-full bg-rose-600 hover:bg-rose-700 text-white py-2 rounded-xl font-bold text-xs transition cursor-pointer mt-1"
+                            >
+                              {lang === "sw" ? "Jaribu Tena" : "Try Again"}
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-400 text-center animate-pulse leading-normal">
+                            {lang === "sw" ? "Tafadhali usifunge dirisha hili. Tunahakiki risiti yako..." : "Please do not close this window. Checking receipt validity..."}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                     <div className="space-y-3">
+                       <div className="relative">
+                         <input 
+                           type="text"
+                           placeholder="Mfano: PP26061109403"
+                           value={localTxId}
+                           onChange={e => setLocalTxId(e.target.value)}
+                           className="w-full bg-white border border-slate-200 outline-none p-3 pr-16 rounded-xl text-xs font-mono font-bold uppercase focus:border-orange-500"
+                         />
+                         <button
+                           type="button"
+                           onClick={() => setShowSMSArea(!showSMSArea)}
+                           className="absolute right-2 top-2 bg-slate-50 hover:bg-slate-100 text-orange-600 font-extrabold p-1.5 px-2.5 rounded-lg text-[9px] border border-orange-200 transition-all cursor-pointer flex items-center gap-1"
+                         >
+                           <Sparkles size={11} className="text-orange-500" />
+                           {lang === "sw" ? "Soma SMS" : "SMS AI"}
+                         </button>
+                       </div>
+
+                       {showSMSArea && (
+                         <div className="bg-slate-900 border border-slate-800 text-white p-3.5 rounded-2xl space-y-3">
+                           <div className="flex justify-between items-center text-[10px]">
+                             <span className="text-amber-400 font-black uppercase">Bandika SMS kupata namba ya muamala</span>
+                             <button onClick={() => setShowSMSArea(false)} className="text-slate-400 hover:text-white">✕</button>
+                           </div>
+                           <textarea
+                             rows={2}
+                             placeholder="Bandika SMS ya mtandao wowote wa Simu (Mpesa, Tigo, Airtel) hapa..."
+                             value={smsText}
+                             onChange={e => setSmsText(e.target.value)}
+                             className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 font-mono text-[10px] text-slate-200 outline-none"
+                           />
+                           <div className="flex justify-end items-center text-[9px]">
+                             <button 
+                               onClick={handleSmsOcrParse}
+                               disabled={isOcrParsing}
+                               className="bg-amber-500 text-slate-950 font-black px-3 py-1 rounded text-[10px]"
+                             >
+                               {isOcrParsing ? "Parsing..." : "Extract ID"}
+                             </button>
+                           </div>
+                         </div>
+                       )}
+
+                       <button 
+                         onClick={handleAutoVerification}
+                         className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1"
+                       >
+                         <CheckCircle2 size={13} />
+                         Tuma Muamala kwa Uhakiki
+                       </button>
+                     </div>
+                   )) : (
+                     <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 rounded-2.5xl text-xs space-y-2.5 font-medium">
+                       <span className="font-bold flex items-center gap-1 text-emerald-700">
+                         🛡️ Malipo Yamethibitishwa na Kulindwa!
+                       </span>
+                       <p className="text-[10px] text-emerald-600 leading-relaxed">
+                         Namba ya Muamala: <strong className="font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded text-emerald-800">{storedProof?.transactionId || localTxId || order.paymentReference}</strong>. Kiasi ulicholipa kimehakikiwa na sasa kimehifadhiwa salama katika Escrow (Orbi PaySafe). Fedha hazitatumwa kwa muuzaji hadi utakapopokea mzigo wako na kuthibitisha ubora wake.
+                       </p>
+                       <button 
+                         onClick={() => {
+                           // delete proof locally to test again
+                           const displayId = order.legacy_id || order.id;
+                           const proofs = getSafePaymentProofs();
+                           delete proofs[displayId];
+                            setLocalTxId("");
+                            db.saveOrder({ id: order.id, paymentReference: "" }).then(() => {
+                              setOrder((prev: any) => ({ ...prev, paymentReference: "" }));
+                            }).catch(e => console.error("Error resetting paymentReference:", e));
+                           localStorage.setItem("orbi_payment_proofs", JSON.stringify(proofs));
+                           setStoredProof(null);
+                           setPaymentSubmittedLocally(false);
+                         }} 
+                         className="bg-orange-50 hover:bg-orange-100 text-orange-700 font-extrabold px-2 py-1 rounded-lg text-[9px] border border-orange-200 inline-block transition cursor-pointer mt-1"
+                       >
+                         Anza Upya Uhakiki (Reset / Re-verify)
+                       </button>
+                     </div>
+                   )}
+                 </div>
+               )}
+
+               {/* Order Items Table */}
+               <div className="space-y-2 border-t border-slate-100 pt-4">
+                 <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-widest block">Orodha ya Bidhaa</h4>
+                 {order.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-xs py-2 border-b border-dashed border-slate-100 font-medium">
+                        <span className="text-slate-600">{item.quantity}x {item.name}</span>
+                        <span className="text-slate-800 font-bold">{formatCurrency(item.price * item.quantity)}</span>
+                    </div>
+                 ))}
+                 <div className="flex justify-between font-black text-sm text-slate-800 pt-2 font-sans">
+                     <span>Jumla</span>
+                     <span className="text-orange-600">{formatCurrency(order.total)}</span>
+                 </div>
+               </div>
+
+               <div className="pt-2 flex flex-col gap-2">
+
+
+                 <button 
+                   onClick={() => setOrder(null)} 
+                   className="w-full border border-slate-200 text-slate-500 p-3 rounded-2xl font-bold hover:bg-slate-100 transition text-xs cursor-pointer"
+                  >
+                     Fuatilia oda nyingine
+                 </button>
+               </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

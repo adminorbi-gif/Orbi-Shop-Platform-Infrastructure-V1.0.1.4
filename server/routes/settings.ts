@@ -1,0 +1,1411 @@
+import { Router } from "express";
+import { supabase, getSupabase, getAdminSupabase, encrypt, decrypt, decryptObject } from "../lib/supabase.js";
+import { GoogleGenAI, Type } from "@google/genai";
+import { getGeminiClient } from "../lib/gemini.js";
+import { getRouteDeliveryHealth } from "../lib/routeDeliveryQuote.js";
+import { DEFAULT_DELIVERY_SETTINGS, getDeliverySettings, toDeliverySettingsRow } from "../lib/deliverySettings.js";
+import { clearCachedValue, sendResilientJson, withTimeout, getCachedValue, setCachedValue } from "../lib/apiResilience.js";
+
+const router = Router();
+
+const optionalSellerSchemaColumns = new Set([
+  "pickup_address",
+  "pickup_place_id",
+  "pickup_lat",
+  "pickup_lng",
+  "pickup_zone_id",
+  "business_logo",
+]);
+
+const isSchemaCacheColumnError = (error: any) => {
+  const message = String(error?.message || "");
+  return (
+    error?.code === "PGRST204" ||
+    /schema cache|Could not find the .* column|column .* does not exist/i.test(message)
+  );
+};
+
+const stripOptionalSellerColumns = (payload: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(payload).filter(([key]) => !optionalSellerSchemaColumns.has(key)),
+  );
+
+const mergeSellerBackupUpdate = async (req: any, sellerId: string, updates: any) => {
+  const { data: legacyData } = await getSupabase(req)
+    .from("promotions")
+    .select("id, description")
+    .eq("title", "SYSTEM_SELLERS")
+    .maybeSingle();
+
+  let sellersList: any[] = [];
+  if (legacyData?.description) {
+    try {
+      const parsed = JSON.parse(legacyData.description);
+      sellersList = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      sellersList = [];
+    }
+  }
+
+  const sellerIndex = sellersList.findIndex((seller: any) => seller.id === sellerId);
+  if (sellerIndex < 0) return;
+
+  const legacyPatch: any = {};
+  if (updates.name !== undefined) legacyPatch.name = updates.name;
+  if (updates.description !== undefined) legacyPatch.description = updates.description;
+  if (updates.pickup_address !== undefined) legacyPatch.pickupAddress = updates.pickup_address;
+  if (updates.pickup_place_id !== undefined) legacyPatch.pickupPlaceId = updates.pickup_place_id;
+  if (updates.pickup_lat !== undefined) legacyPatch.pickupLat = updates.pickup_lat;
+  if (updates.pickup_lng !== undefined) legacyPatch.pickupLng = updates.pickup_lng;
+  if (updates.pickup_zone_id !== undefined) legacyPatch.pickupZoneId = updates.pickup_zone_id;
+  if (updates.businessLogo !== undefined) legacyPatch.businessLogo = updates.businessLogo;
+  if (updates.business_logo !== undefined) legacyPatch.businessLogo = updates.business_logo;
+  if (updates.tin !== undefined) legacyPatch.tin = updates.tin;
+
+  sellersList[sellerIndex] = { ...sellersList[sellerIndex], ...legacyPatch };
+
+  if (legacyData?.id) {
+    await getSupabase(req)
+      .from("promotions")
+      .update({ description: JSON.stringify(sellersList) })
+      .eq("id", legacyData.id);
+  } else {
+    await getSupabase(req)
+      .from("promotions")
+      .insert({ title: "SYSTEM_SELLERS", description: JSON.stringify(sellersList), visible: false });
+  }
+};
+
+const defaultDeliveryZones = [
+  { id: "dar-es-salaam", name: "Dar es Salaam", labelSw: "Dar es Salaam", labelEn: "Dar es Salaam", price: 2500, minDays: 1, maxDays: 2, isActive: true, sortOrder: 1 },
+  { id: "nearby-regions", name: "Mikoa ya karibu", labelSw: "Mikoa ya karibu", labelEn: "Nearby regions", price: 4500, minDays: 2, maxDays: 3, isActive: true, sortOrder: 2 },
+  { id: "other-regions", name: "Mikoa mingine", labelSw: "Mikoa mingine", labelEn: "Other regions", price: 6500, minDays: 3, maxDays: 5, isActive: true, sortOrder: 3 },
+];
+
+const mapDeliveryZone = (row: any) => ({
+  id: row.id,
+  name: row.name,
+  labelSw: row.label_sw || row.labelSw || row.name,
+  labelEn: row.label_en || row.labelEn || row.name,
+  price: Number(row.price || 0),
+  minDays: Number(row.min_days ?? row.minDays ?? 1),
+  maxDays: Number(row.max_days ?? row.maxDays ?? row.min_days ?? row.minDays ?? 1),
+  isActive: row.is_active ?? row.isActive ?? true,
+  sortOrder: Number(row.sort_order ?? row.sortOrder ?? 0),
+  sellerId: row.seller_id || row.sellerId || null,
+});
+
+const isUuid = (value: any) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+const toDeliveryZoneRow = (zone: any, index: number) => ({
+  id: isUuid(zone.id) ? zone.id : undefined,
+  name: String(zone.name || zone.labelSw || zone.labelEn || `Delivery Zone ${index + 1}`).trim(),
+  label_sw: String(zone.labelSw || zone.name || "").trim(),
+  label_en: String(zone.labelEn || zone.name || "").trim(),
+  price: Math.max(0, Number(zone.price || 0)),
+  min_days: Math.max(0, Number(zone.minDays || 0)),
+  max_days: Math.max(Math.max(0, Number(zone.minDays || 0)), Number(zone.maxDays || zone.minDays || 0)),
+  is_active: zone.isActive !== false,
+  sort_order: Number(zone.sortOrder ?? index + 1),
+  seller_id: zone.sellerId || null,
+  updated_at: new Date().toISOString(),
+});
+
+const mapDeliveryRule = (row: any) => ({
+  id: row.id,
+  zoneId: row.zone_id || row.zoneId,
+  deliveryClass: row.delivery_class || row.deliveryClass || "standard",
+  minWeightKg: Number(row.min_weight_kg ?? row.minWeightKg ?? 0),
+  maxWeightKg: row.max_weight_kg ?? row.maxWeightKg ?? null,
+  baseFee: Number(row.base_fee ?? row.baseFee ?? 0),
+  perKgFee: Number(row.per_kg_fee ?? row.perKgFee ?? 0),
+  fragileFee: Number(row.fragile_fee ?? row.fragileFee ?? 0),
+  oversizedFee: Number(row.oversized_fee ?? row.oversizedFee ?? 0),
+  coldChainFee: Number(row.cold_chain_fee ?? row.coldChainFee ?? 0),
+  minDays: Number(row.min_days ?? row.minDays ?? 1),
+  maxDays: Number(row.max_days ?? row.maxDays ?? row.min_days ?? row.minDays ?? 1),
+  isAvailable: row.is_available ?? row.isAvailable ?? true,
+  reasonIfUnavailable: row.reason_if_unavailable || row.reasonIfUnavailable || "",
+  sortOrder: Number(row.sort_order ?? row.sortOrder ?? 0),
+});
+
+const toDeliveryRuleRow = (rule: any, index: number) => ({
+  id: isUuid(rule.id) ? rule.id : undefined,
+  zone_id: String(rule.zoneId || rule.zone_id || "").trim(),
+  delivery_class: String(rule.deliveryClass || rule.delivery_class || "standard").trim().toLowerCase(),
+  min_weight_kg: Math.max(0, Number(rule.minWeightKg ?? rule.min_weight_kg ?? 0)),
+  max_weight_kg: rule.maxWeightKg === "" || rule.maxWeightKg === undefined ? null : Math.max(0, Number(rule.maxWeightKg ?? rule.max_weight_kg ?? 0)),
+  base_fee: Math.max(0, Number(rule.baseFee ?? rule.base_fee ?? 0)),
+  per_kg_fee: Math.max(0, Number(rule.perKgFee ?? rule.per_kg_fee ?? 0)),
+  fragile_fee: Math.max(0, Number(rule.fragileFee ?? rule.fragile_fee ?? 0)),
+  oversized_fee: Math.max(0, Number(rule.oversizedFee ?? rule.oversized_fee ?? 0)),
+  cold_chain_fee: Math.max(0, Number(rule.coldChainFee ?? rule.cold_chain_fee ?? 0)),
+  min_days: Math.max(0, Number(rule.minDays ?? rule.min_days ?? 1)),
+  max_days: Math.max(Math.max(0, Number(rule.minDays ?? rule.min_days ?? 1)), Number(rule.maxDays ?? rule.max_days ?? rule.minDays ?? 1)),
+  is_available: rule.isAvailable !== false,
+  reason_if_unavailable: String(rule.reasonIfUnavailable || rule.reason_if_unavailable || "").trim(),
+  sort_order: Number(rule.sortOrder ?? rule.sort_order ?? index + 1),
+  updated_at: new Date().toISOString(),
+});
+
+// 1. INVOICE SETTINGS
+router.get("/invoice", async (req, res) => {
+  try {
+    const { data } = await getSupabase(req).from('invoice_settings').select('*').eq('id', 1).maybeSingle();
+    let payOpts: any[] = [];
+    try {
+      const { data: po } = await getSupabase(req).from('payment_options').select('*').eq('is_active', true);
+      payOpts = po || [];
+    } catch (e) {}
+
+    let extraSettings: any = {};
+    try {
+      const { data: appSetData } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_APP_SETTINGS').maybeSingle();
+      if (appSetData && appSetData.description) {
+        extraSettings = JSON.parse(appSetData.description);
+      }
+    } catch (e) {}
+
+    let portalData: any = null;
+    try {
+      const { data: ps } = await getSupabase(req).from('portal_settings').select('*').eq('id', 1).maybeSingle();
+      portalData = ps;
+    } catch (e) {}
+
+    const details = {
+      companyName: data ? decrypt(data.company_name) : "Orbi Shop",
+      address: data ? decrypt(data.address) : "",
+      phone: data ? decrypt(data.phone) : "+255764258114",
+      email: data ? decrypt(data.email) : "shop@orbifinancial.com",
+      terms: data ? decrypt(data.terms) : "",
+      paymentOptions: (payOpts || []).map(po => ({
+        ...po,
+        name: decrypt(po.name),
+        details: decrypt(po.details)
+      })),
+      appBarBackground: portalData && portalData.app_bar_background !== null ? portalData.app_bar_background : (data && data.app_bar_background !== null ? data.app_bar_background : (extraSettings.appBarBackground || "")),
+      appBarBackground2: portalData && portalData.app_bar_background2 !== null ? portalData.app_bar_background2 : (data && data.app_bar_background2 !== null ? data.app_bar_background2 : (extraSettings.appBarBackground2 || "")),
+      appBarBackground3: portalData && portalData.app_bar_background3 !== null ? portalData.app_bar_background3 : (data && data.app_bar_background3 !== null ? data.app_bar_background3 : (extraSettings.appBarBackground3 || "")),
+      disableAppBarAnimations: portalData && portalData.disable_app_bar_animations !== null ? portalData.disable_app_bar_animations : (data && data.disable_app_bar_animations !== null ? data.disable_app_bar_animations : (extraSettings.disableAppBarAnimations || false)),
+      ...extraSettings
+    };
+
+    if (details.email === "" || details.email.includes("689919994")) details.email = "shop@orbifinancial.com";
+    if (details.phone === "" || details.phone.includes("689919994")) details.phone = "+255764258114";
+
+    res.json({ success: true, data: details });
+  } catch (error: any) {
+    console.error("GET /api/v1/settings/invoice error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/invoice", async (req, res) => {
+  try {
+    const settings = req.body;
+    await getSupabase(req).from('invoice_settings').upsert({
+      id: 1,
+      company_name: encrypt(settings.companyName),
+      address: encrypt(settings.address),
+      phone: encrypt(settings.phone),
+      email: encrypt(settings.email),
+      terms: encrypt(settings.terms)
+    });
+
+    try {
+      await getSupabase(req).from('portal_settings').upsert({
+        id: 1,
+        app_bar_background: settings.appBarBackground || "",
+        app_bar_background2: settings.appBarBackground2 || "",
+        app_bar_background3: settings.appBarBackground3 || "",
+        disable_app_bar_animations: !!settings.disableAppBarAnimations,
+        app_bar_color: settings.appBarColor || ""
+      });
+    } catch (portalErr) {
+      console.warn("Could not write portal_settings table:", portalErr);
+    }
+
+    try {
+      await getSupabase(req).from('payment_options').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+      if (settings.paymentOptions && settings.paymentOptions.length > 0) {
+        const payOps = settings.paymentOptions.map((po: any) => ({
+          name: encrypt(po.name),
+          details: encrypt(po.details),
+          is_active: true
+        }));
+        await getSupabase(req).from('payment_options').insert(payOps);
+      }
+    } catch (optErr) {
+      console.warn("Could not write payment_options table:", optErr);
+    }
+
+    try {
+      const extraSettings = {
+        pointsRate: settings.pointsRate,
+        pointsWorth: settings.pointsWorth,
+        pointsRequiredPerTzsDiscount: settings.pointsRequiredPerTzsDiscount,
+        v_5k_cost: settings.v_5k_cost,
+        v_15_vip_cost: settings.v_15_vip_cost,
+        v_free_ship_cost: settings.v_free_ship_cost,
+        appBarBackground: settings.appBarBackground,
+        appBarBackground2: settings.appBarBackground2,
+        appBarBackground3: settings.appBarBackground3,
+        appBarColor: settings.appBarColor,
+        disableAppBarAnimations: !!settings.disableAppBarAnimations,
+      };
+      
+      const { data: existAppSet } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_APP_SETTINGS').maybeSingle();
+      if (existAppSet && existAppSet.id) {
+         const { error } = await getSupabase(req).from('promotions').update({ description: JSON.stringify(extraSettings) }).eq('id', existAppSet.id);
+         if (error) console.warn("Supabase update error:", error);
+      } else {
+         const { error } = await getSupabase(req).from('promotions').insert({
+           title: 'SYSTEM_APP_SETTINGS',
+           description: JSON.stringify(extraSettings),
+           visible: false
+         });
+         if (error) console.warn("Supabase insert error:", error);
+      }
+    } catch (setErr) {
+      console.warn("Could not write SYSTEM_APP_SETTINGS:", setErr);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("POST /api/v1/settings/invoice error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/delivery-zones", async (req, res) => {
+  try {
+    const { data, error } = await getSupabase(req)
+      .from("delivery_zones")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.json({ success: true, data: defaultDeliveryZones });
+    }
+
+    res.json({ success: true, data: data.map(mapDeliveryZone) });
+  } catch (error: any) {
+    console.warn("GET /api/v1/settings/delivery-zones fallback:", error.message);
+    res.json({ success: true, data: defaultDeliveryZones });
+  }
+});
+
+router.post("/delivery-zones", async (req, res) => {
+  try {
+    const zones = Array.isArray(req.body) ? req.body : req.body?.zones;
+    if (!Array.isArray(zones)) {
+      return res.status(400).json({ success: false, error: "DELIVERY_ZONES_ARRAY_REQUIRED" });
+    }
+
+    const rows = zones
+      .map(toDeliveryZoneRow)
+      .filter((row: any) => row.name);
+
+    const { data: existing } = await getSupabase(req).from("delivery_zones").select("id");
+    const retained = rows.map((row: any) => row.id).filter(Boolean);
+    const toDelete = (existing || []).filter((row: any) => !retained.includes(row.id));
+
+    for (const row of toDelete) {
+      await getSupabase(req).from("delivery_zones").delete().eq("id", row.id);
+    }
+
+    for (const row of rows) {
+      const { error } = await getSupabase(req).from("delivery_zones").upsert(row);
+      if (error) throw error;
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("POST /api/v1/settings/delivery-zones error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/delivery-rules", async (req, res) => {
+  try {
+    const { data, error } = await getSupabase(req)
+      .from("delivery_rules")
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, data: (data || []).map(mapDeliveryRule) });
+  } catch (error: any) {
+    console.warn("GET /api/v1/settings/delivery-rules fallback:", error.message);
+    res.json({ success: true, data: [] });
+  }
+});
+
+router.post("/delivery-rules", async (req, res) => {
+  try {
+    const rules = Array.isArray(req.body) ? req.body : req.body?.rules;
+    if (!Array.isArray(rules)) {
+      return res.status(400).json({ success: false, error: "DELIVERY_RULES_ARRAY_REQUIRED" });
+    }
+
+    const rows = rules
+      .map(toDeliveryRuleRow)
+      .filter((row: any) => row.zone_id && row.delivery_class);
+
+    const { data: existing } = await getSupabase(req).from("delivery_rules").select("id");
+    const retained = rows.map((row: any) => row.id).filter(Boolean);
+    const toDelete = (existing || []).filter((row: any) => !retained.includes(row.id));
+
+    for (const row of toDelete) {
+      await getSupabase(req).from("delivery_rules").delete().eq("id", row.id);
+    }
+
+    for (const row of rows) {
+      const { error } = await getSupabase(req).from("delivery_rules").upsert(row);
+      if (error) throw error;
+    }
+
+    clearCachedValue("settings:sellers");
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("POST /api/v1/settings/delivery-rules error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/delivery-settings", async (req, res) => {
+  try {
+    const data = await getDeliverySettings(getSupabase(req));
+    res.json({ success: true, data });
+  } catch (error: any) {
+    console.warn("GET /api/v1/settings/delivery-settings fallback:", error.message);
+    res.json({ success: true, data: DEFAULT_DELIVERY_SETTINGS });
+  }
+});
+
+router.post("/delivery-settings", async (req, res) => {
+  try {
+    const row = toDeliverySettingsRow(req.body || {});
+    const { error } = await getSupabase(req).from("delivery_settings").upsert(row);
+    if (error) throw error;
+    res.json({ success: true, data: await getDeliverySettings(getSupabase(req)) });
+  } catch (error: any) {
+    console.error("POST /api/v1/settings/delivery-settings error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/service-health", async (req, res) => {
+  const checkedAt = new Date().toISOString();
+  const services: any[] = [];
+  const googlePlacesKeyConfigured = Boolean(
+    process.env.GOOGLE_MAPS_PLATFORM_KEY ||
+    process.env.GOOGLE_MAPS_PLACES_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_MAPS_ROUTES_API_KEY,
+  );
+
+  const routeHealth = getRouteDeliveryHealth();
+  services.push({
+    id: "google_routes",
+    name: "Google Routes API",
+    group: "Delivery",
+    status: routeHealth.routesApi.status,
+    message:
+      routeHealth.routesApi.status === "ok"
+        ? "Routes API is responding and route quotes can use exact road distance."
+        : routeHealth.routesApi.status === "ready"
+          ? "API key is configured. Waiting for the next live route quote to confirm response."
+          : routeHealth.routesApi.status === "degraded"
+            ? `Routes API failed recently: ${routeHealth.routesApi.lastError || "unknown error"}`
+            : "GOOGLE_MAPS_ROUTES_API_KEY is not configured. Delivery is using fallback rules.",
+    meta: routeHealth.routesApi,
+  });
+
+  services.push({
+    id: "google_places",
+    name: "Google Places / Maps Search",
+    group: "Delivery",
+    status: googlePlacesKeyConfigured ? "ready" : "error",
+    message: googlePlacesKeyConfigured
+      ? "Places API key is configured. Checkout, seller pickup, and admin zone search can use Google location data."
+      : "Google Places key is missing. Location search will fall back to manual address entry.",
+    meta: {
+      apiKeyConfigured: googlePlacesKeyConfigured,
+      acceptedEnv: ["GOOGLE_MAPS_PLATFORM_KEY", "GOOGLE_MAPS_PLACES_API_KEY", "GOOGLE_MAPS_API_KEY", "GOOGLE_MAPS_ROUTES_API_KEY"],
+    },
+  });
+
+  services.push({
+    id: "delivery_route_cache",
+    name: "Delivery Route Cache",
+    group: "Delivery",
+    status: routeHealth.routeCache.status,
+    message: `Route cache is active for ${routeHealth.routeCache.ttlMinutes} minutes.`,
+    meta: routeHealth.routeCache,
+  });
+
+  services.push({
+    id: "delivery_fallback",
+    name: "Delivery Fallback Engine",
+    group: "Delivery",
+    status: routeHealth.fallback.status,
+    message: "Zone/rule and distance-estimate fallback are available when Google Routes cannot respond.",
+    meta: routeHealth.fallback,
+  });
+
+  try {
+    const { count, error } = await getSupabase(req)
+      .from("delivery_zones")
+      .select("id", { count: "exact", head: true });
+    services.push({
+      id: "delivery_zones_db",
+      name: "Delivery Zones Database",
+      group: "Database",
+      status: error ? "degraded" : "ok",
+      message: error ? error.message : `${count || 0} delivery zones reachable.`,
+      meta: { count: count || 0 },
+    });
+  } catch (error: any) {
+    services.push({
+      id: "delivery_zones_db",
+      name: "Delivery Zones Database",
+      group: "Database",
+      status: "degraded",
+      message: error.message || "Delivery zones database check failed.",
+      meta: {},
+    });
+  }
+
+  try {
+    const { count, error } = await getSupabase(req)
+      .from("delivery_settings")
+      .select("id", { count: "exact", head: true });
+    services.push({
+      id: "delivery_settings_db",
+      name: "Delivery Global Rate Card",
+      group: "Database",
+      status: error ? "degraded" : "ok",
+      message: error ? error.message : `${count || 0} global delivery setting record reachable.`,
+      meta: { count: count || 0 },
+    });
+  } catch (error: any) {
+    services.push({
+      id: "delivery_settings_db",
+      name: "Delivery Global Rate Card",
+      group: "Database",
+      status: "degraded",
+      message: error.message || "Delivery settings database check failed.",
+      meta: {},
+    });
+  }
+
+  const hasDegraded = services.some((service) => service.status === "degraded");
+  const hasNotConfigured = services.some((service) => service.status === "not_configured");
+
+  res.json({
+    success: true,
+    data: {
+      checkedAt,
+      overallStatus: hasDegraded ? "degraded" : hasNotConfigured ? "attention" : "ok",
+      services,
+    },
+  });
+});
+
+// 2. NICHES
+router.get("/niches", async (req, res) => {
+  try {
+    // 1. Try reading from promotions FIRST because it contains the COMPLETE JSON (including sub-categories)
+    let nichesList: any[] = [];
+    try {
+      const { data } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_NICHES').maybeSingle();
+      if (data && data.description) {
+        nichesList = JSON.parse(data.description);
+      }
+    } catch (e) {
+      console.error("Error reading SYSTEM_NICHES from promotions:", e);
+    }
+
+    if (nichesList && nichesList.length > 0) {
+      return res.json({ success: true, data: nichesList });
+    }
+
+    // 2. Fallback to standard niches table with default Swahili & English sub-categories mapping
+    try {
+      const { data, error } = await getSupabase(req).from('niches').select('*').order('name', { ascending: true });
+      if (!error && data && data.length > 0) {
+        const DEFAULT_CATEGORIES: Record<string, string[]> = {
+          "electronics": ["Smartphone", "Laptops", "Accessories", "Audio", "Cameras"],
+          "fashion & apparel": ["Men's Wear", "Women's Wear", "Shoes", "Watches", "Bags"],
+          "home & furniture": ["Sofa", "Kitchen", "Bedding", "Decor", "Lighting"],
+          "health & beauty": ["Cosmetics", "Skincare", "Haircare", "Perfumes", "Wellness"],
+          "auto & motors": ["Spare Parts", "Car Accessories", "Tires", "Tools", "Fluids"],
+          "groceries & food": ["Beverages", "Snacks", "Grains", "Canned Food", "Fresh Food"],
+          "groceries & food/supermarket & food": ["Beverages", "Snacks", "Grains", "Canned Food", "Fresh Food"],
+          "supermarket & food": ["Beverages", "Snacks", "Grains", "Canned Food", "Fresh Food"]
+        };
+
+        return res.json({
+          success: true,
+          data: data.map(n => {
+            const key = n.name.toLowerCase().trim();
+            const fallbackCats = DEFAULT_CATEGORIES[key] || [];
+            return {
+              name: n.name,
+              icon: n.icon || 'Smartphone',
+              categories: fallbackCats
+            };
+          })
+        });
+      }
+    } catch (e) {}
+
+    res.json({ success: true, data: [] });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/niches", async (req, res) => {
+  try {
+    const niches = req.body;
+    // Legacy support write
+    try {
+      const payloadLegacy = { title: 'SYSTEM_NICHES', description: JSON.stringify(niches), visible: false };
+      const { data: legacyData } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_NICHES').maybeSingle();
+      if (legacyData && legacyData.id) {
+         await getSupabase(req).from('promotions').update(payloadLegacy).eq('id', legacyData.id);
+      } else {
+         await getSupabase(req).from('promotions').insert([payloadLegacy]);
+      }
+    } catch (e) {}
+
+    // Standard write
+    try {
+      for (const niche of niches) {
+        await getSupabase(req).from('niches').upsert({ name: niche.name, icon: niche.icon }, { onConflict: 'name' });
+      }
+      const { data: allDbNiches } = await getSupabase(req).from('niches').select('name');
+      if (allDbNiches) {
+        const inputNames = niches.map((n: any) => n.name);
+        const toDelete = allDbNiches.filter(n => !inputNames.includes(n.name));
+        for (const d of toDelete) {
+          await getSupabase(req).from('niches').delete().eq('name', d.name);
+        }
+      }
+    } catch (e) {}
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// AI-POWERED NICHE SUGGESTER
+router.post("/niches/suggest", async (req, res) => {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(200).json({
+        success: false,
+        error: "GEMINI_API_KEY_MISSING",
+        message: "Gemini API key is not configured in the developer dashboard secrets yet."
+      });
+    }
+
+    const { data: dbProducts, error: prodErr } = await getSupabase(req).from('products').select('*');
+    if (prodErr) throw prodErr;
+
+    const unorganizedList = (dbProducts || []).filter((p: any) => {
+      const cat = p.category || '';
+      if (!cat.includes('::')) return true;
+      const parts = cat.split('::');
+      const niche = parts[0];
+      return niche === 'Electronics' || niche === 'Mengineyo' || niche === '' || niche.toLowerCase() === 'uncategorized';
+    });
+
+    if (unorganizedList.length === 0) {
+      return res.json({
+        success: true,
+        message: "All products are properly organized!",
+        suggestions: [],
+        totalPending: 0
+      });
+    }
+
+    const scanItems = unorganizedList.slice(0, 15).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      currentCategory: p.category || ''
+    }));
+
+    const validIcons = [
+      "Smartphone", "Shirt", "Sofa", "Heart", "CarFront", "ShoppingBag", "Package", "Store", "Tag", "Ticket", 
+      "Activity", "Award", "Zap", "Cpu", "Camera", "Bot", "FileText", "MessageSquare", "Laptop", "Baby", 
+      "Palette", "Coffee", "Dumbbell", "Scissors", "Briefcase", "Gift", "Headphones", "Cake", "Watch", "Bike", 
+      "Key", "BookOpen", "Leaf", "Flame", "Music", "Gem", "Tv", "Compass", "Footprints", "Crown", "GlassWater", 
+      "Wrench", "Flower2", "Anchor", "Apple", "Banana", "Beer", "Bone", "Box", "Brain", "Brush", "Bus", 
+      "Calculator", "Candy", "Cat", "ChefHat", "Clapperboard", "Cloud", "Cookie", "Dog", "Dices", "Disc", "Egg", 
+      "Fan", "Feather", "Fish", "Gamepad2", "Gavel", "Guitar", "Hammer", "IceCream", "Joystick", "Lightbulb", 
+      "Luggage", "Map", "Mic", "Microscope", "Moon", "Mountain", "Paintbrush", "PenTool", "Pill", "Pizza", 
+      "Plane", "Plug", "Printer", "Puzzle", "Radio", "Receipt", "Rocket", "Ruler", "Scale", "Server", 
+      "Shell", "ShowerHead", "Shovel", "Sprout", "Stethoscope", "Sun", "Table", "Tablet", "Tent", "Thermometer", 
+      "Trophy", "Umbrella", "Utensils", "Wallet", "Wine", "Globe"
+    ];
+
+     const ai = getGeminiClient();
+
+    const prompt = `You are an expert product categorizer and eCommerce catalog specialist at Orbi Shop.
+Analyze the following list of unorganized or generic product listings. Recommend an appropriate main niche, category, and sub-category (family) for each product to make the store easier to browse.
+Use human-friendly, standard market niches (e.g. Fashion & Apparel, Groceries, Sports & Fitness, Pet Supplies, Home & Decor, Books & Stationery, Tools, etc.) instead of default categories.
+
+Products to organize:
+${JSON.stringify(scanItems, null, 2)}
+
+Strict constraints for your recommendation:
+1. Provide a "suggestedNiche" (the top-level niche name, e.g. "Beauty & Health")
+2. Provide a "suggestedCategory" (the specific subcategory in that niche, e.g. "Skin Care")
+3. Provide a "suggestedFamily" (the specific sub-subcategory / brand family, e.g. "Moisturizers" or "Hisense")
+4. Provide a brief explanation in 'reasoning' (1-2 sentences, bilingual Swahili/English)
+5. Provide a "suggestedNicheIcon" which must be strictly selected from this exact list of valid Lucide icon names:
+${validIcons.join(', ')}
+
+Return the output as a valid JSON object matching the requested schema structure.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            suggestions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  productId: { type: Type.STRING },
+                  productName: { type: Type.STRING },
+                  suggestedNiche: { type: Type.STRING },
+                  suggestedCategory: { type: Type.STRING },
+                  suggestedFamily: { type: Type.STRING },
+                  reasoning: { type: Type.STRING },
+                  suggestedNicheIcon: { type: Type.STRING }
+                },
+                required: ["productId", "productName", "suggestedNiche", "suggestedCategory", "suggestedFamily", "reasoning", "suggestedNicheIcon"]
+              }
+            }
+          },
+          required: ["suggestions"]
+        }
+      }
+    });
+
+    let parsed = { suggestions: [] };
+    try {
+      const text = response.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (e) {
+      console.warn("Failed to parse Niche Scan result:", e);
+    }
+    res.json({
+      success: true,
+      suggestions: parsed.suggestions || [],
+      totalPending: unorganizedList.length
+    });
+  } catch (error: any) {
+    console.error("Niche Suggester server error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/niches/apply-suggestions", async (req, res) => {
+  try {
+    const { suggestions } = req.body;
+    if (!suggestions || !Array.isArray(suggestions)) {
+      return res.status(400).json({ success: false, error: "Invalid suggestions body" });
+    }
+
+    let sysNichesList: any[] = [];
+    const { data: legacyNiches } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_NICHES').maybeSingle();
+    if (legacyNiches && legacyNiches.description) {
+      try {
+        sysNichesList = JSON.parse(legacyNiches.description);
+      } catch (e) {}
+    }
+
+    const { data: tblNiches } = await getSupabase(req).from('niches').select('*');
+    const existingNiches = tblNiches || [];
+
+    for (const item of suggestions) {
+      const { productId, suggestedNiche, suggestedCategory, suggestedFamily, suggestedNicheIcon } = item;
+
+      const dbCategory = `${suggestedNiche}::${suggestedCategory}::${suggestedFamily || ''}`;
+      await getSupabase(req).from('products').update({ category: dbCategory }).eq('id', productId);
+
+      const foundInLegacy = sysNichesList.find((n: any) => n.name.toLowerCase() === suggestedNiche.toLowerCase());
+      if (!foundInLegacy) {
+        sysNichesList.push({
+          name: suggestedNiche,
+          icon: suggestedNicheIcon || "Smartphone",
+          categories: [{ name: suggestedCategory, families: suggestedFamily ? [suggestedFamily] : [] }]
+        });
+      } else {
+        const cats = Array.isArray(foundInLegacy.categories) ? foundInLegacy.categories : [];
+        const existingCat = cats.find((c: any) => (typeof c === 'string' ? c : c.name).toLowerCase() === suggestedCategory.toLowerCase());
+        
+        if (!existingCat) {
+          cats.push({ name: suggestedCategory, families: suggestedFamily ? [suggestedFamily] : [] });
+          foundInLegacy.categories = cats;
+        } else if (suggestedFamily) {
+          if (typeof existingCat === 'string') {
+            // Migration: Convert string category to object if needed
+            const idx = cats.indexOf(existingCat);
+            cats[idx] = { name: existingCat, families: [suggestedFamily] };
+          } else {
+            const fams = existingCat.families || [];
+            if (!fams.includes(suggestedFamily)) {
+              fams.push(suggestedFamily);
+              existingCat.families = fams;
+            }
+          }
+        }
+      }
+
+      const foundInDb = existingNiches.find((n: any) => n.name.toLowerCase() === suggestedNiche.toLowerCase());
+      if (!foundInDb) {
+        await getSupabase(req).from('niches').upsert({
+          name: suggestedNiche,
+          icon: suggestedNicheIcon || "Smartphone"
+        }, { onConflict: 'name' });
+      }
+    }
+
+    const payloadLegacy = { title: 'SYSTEM_NICHES', description: JSON.stringify(sysNichesList), visible: false };
+    if (legacyNiches) {
+      await getSupabase(req).from('promotions').update(payloadLegacy).eq('title', 'SYSTEM_NICHES');
+    } else {
+      await getSupabase(req).from('promotions').insert([payloadLegacy]);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Niche Suggester apply error:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. STAFF
+router.get("/staff", async (req, res) => {
+  try {
+    let selectRes = await getSupabase(req).from('staff_roles').select('*').order('created_at', { ascending: true });
+    const data = selectRes.data;
+    const error = selectRes.error;
+
+    if (error) {
+      // Legacy promotions fallback check
+      let legacyRes = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_STAFF').maybeSingle();
+      if (legacyRes.error) {
+        legacyRes = await supabase.from('promotions').select('description').eq('title', 'SYSTEM_STAFF').maybeSingle();
+      }
+      const legacy = legacyRes.data;
+      let fallbackList = [];
+      if (legacy && legacy.description) {
+        try { fallbackList = JSON.parse(legacy.description); } catch(pe) {}
+      }
+      return res.json({ success: true, data: fallbackList });
+    }
+    res.json({ success: true, data: data || [] });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/staff", async (req, res) => {
+  try {
+    const staffList = req.body;
+    try {
+      const { data: existingData } = await getSupabase(req).from('staff_roles').select('email');
+      const existingEmails = existingData?.map(d => d.email) || [];
+      const incomingEmails = staffList.map((s: any) => s.email.toLowerCase());
+      
+      const toDeleteEmails = existingEmails.filter(email => !incomingEmails.includes(email.toLowerCase()) && email !== 'admin.orbi@gmail.com');
+      if (toDeleteEmails.length > 0) {
+        await getSupabase(req).from('staff_roles').delete().in('email', toDeleteEmails);
+      }
+
+      for (const s of staffList) {
+        if (s.email.toLowerCase() === 'admin.orbi@gmail.com') continue;
+        const payload = {
+          name: s.name,
+          email: s.email.toLowerCase(),
+          role: s.role,
+          status: s.status || 'active',
+          permissions: ['*']
+        };
+        const { data: existing } = await getSupabase(req).from('staff_roles').select('id').eq('email', s.email.toLowerCase()).maybeSingle();
+        if (existing) {
+          await getSupabase(req).from('staff_roles').update(payload).eq('id', existing.id);
+        } else {
+          await getSupabase(req).from('staff_roles').insert([payload]);
+        }
+      }
+    } catch (e) {}
+
+    // Legacy backup write
+    try {
+      const payloadLegacy = { title: 'SYSTEM_STAFF', description: JSON.stringify(staffList), visible: false };
+      const { data: legacyData } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_STAFF').maybeSingle();
+      if (legacyData && legacyData.id) {
+         await getSupabase(req).from('promotions').update(payloadLegacy).eq('id', legacyData.id);
+      } else {
+         await getSupabase(req).from('promotions').insert([payloadLegacy]);
+      }
+    } catch (e) {}
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. SELLERS
+let lastKnownSystemSellersBackup: any[] = [
+  { id: 'S1', name: 'Orbi Official', description: 'Official products directly provided by Orbi Shop.', avatar: 'https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png' }
+];
+
+const getSystemSellersBackup = async (req: any): Promise<any[]> => {
+  const cached = getCachedValue<any[]>("global:system_sellers_backup");
+  if (cached) return cached;
+
+  try {
+    const { data } = await withTimeout(
+      getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_SELLERS').maybeSingle(),
+      8000,
+      "seller backup query"
+    );
+    if (data && data.description) {
+      const parsed = JSON.parse(data.description);
+      if (Array.isArray(parsed)) {
+        setCachedValue("global:system_sellers_backup", parsed, 10 * 60 * 1000); // 10 minutes cache
+        lastKnownSystemSellersBackup = parsed;
+        return parsed;
+      }
+    }
+  } catch (error: any) {
+    console.info("[API Resilience] Info: loaded backup SYSTEM_SELLERS from memory cache instead of direct query.", error?.message || error);
+  }
+  return lastKnownSystemSellersBackup;
+};
+
+router.get("/sellers", async (req, res) => {
+  return sendResilientJson(res, "settings:sellers", async () => {
+    let backupSellers: any[] = [];
+    
+    // Execute the non-critical enrichment backup query and main sellers query in parallel to prevent sequential delays
+    const [backupRes, sellersRes] = await Promise.allSettled([
+      getSystemSellersBackup(req),
+      withTimeout(
+        getSupabase(req).from('sellers').select('*').order('name', { ascending: true }),
+        8000,
+        "sellers query",
+      )
+    ]);
+
+    if (backupRes.status === "fulfilled" && backupRes.value) {
+      backupSellers = backupRes.value;
+    } else {
+      backupSellers = lastKnownSystemSellersBackup;
+    }
+
+    if (sellersRes.status === "fulfilled" && sellersRes.value) {
+      const { data, error } = sellersRes.value;
+      if (!error && data && data.length > 0) {
+        const decryptedData = decryptObject(data);
+        const mapped = decryptedData.map((s: any) => {
+          const bSeller = backupSellers.find((b: any) => b.id === s.id);
+          return {
+            id: s.id,
+            name: s.name,
+            description: s.description || "",
+            avatar: s.avatar || undefined,
+            banner: s.banner || undefined,
+            isPro: s.is_pro || false,
+            proUntil: s.pro_until ? new Date(s.pro_until).getTime() : undefined,
+            email: s.email || undefined,
+            activePlanId: s.active_plan_id || undefined,
+            subscriptionPaidAt: s.subscription_paid_at ? new Date(s.subscription_paid_at).getTime() : undefined,
+            status: s.status || "active",
+            securityFlags: s.security_flags || 0,
+            deleteRequested: s.delete_requested || false,
+            invoiceCompanyName: s.invoice_company_name || undefined,
+            invoiceAddress: s.invoice_address || undefined,
+            invoicePhone: s.invoice_phone || undefined,
+            invoiceEmail: s.invoice_email || undefined,
+            invoiceTerms: s.invoice_terms || undefined,
+            pickupAddress: s.pickup_address || undefined,
+            pickupPlaceId: s.pickup_place_id || undefined,
+            pickupLat: s.pickup_lat ?? undefined,
+            pickupLng: s.pickup_lng ?? undefined,
+            pickupZoneId: s.pickup_zone_id || undefined,
+            // Rich verification attributes merged from JSON backup
+            isVerifiedSeller: bSeller ? bSeller.isVerifiedSeller || false : false,
+            fullName: bSeller ? bSeller.fullName || "" : "",
+            phone: bSeller ? bSeller.phone || "" : "",
+            location: bSeller ? bSeller.location || "" : "",
+            tin: bSeller ? bSeller.tin || "" : "",
+            isApproved: bSeller ? bSeller.isApproved !== false : true,
+            mustChangePassword: bSeller ? bSeller.mustChangePassword || false : false,
+            password: bSeller ? bSeller.password || "" : ""
+          };
+        });
+        return mapped;
+      }
+    }
+
+    // Fallback if main database query didn't return any sellers or errored out
+    let sellersList = [{ id: 'S1', name: 'Orbi Official', description: 'Official products directly provided by Orbi Shop.', avatar: 'https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png' }];
+    try {
+      const data = await getSystemSellersBackup(req);
+      if (data && data.length > 0) {
+        sellersList = data;
+      }
+    } catch (e) {
+      console.warn("Failed to load fallback SYSTEM_SELLERS:", e);
+    }
+    return sellersList;
+  }, {
+    ttlMs: 60000,
+    timeoutMs: 15000,
+    label: "sellers settings",
+    retries: 1,
+    fallback: [{ id: 'S1', name: 'Orbi Official', description: 'Official products directly provided by Orbi Shop.', avatar: 'https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png' }],
+  });
+});
+
+router.post("/sellers", async (req, res) => {
+  try {
+    const sellers = req.body;
+
+    // Load any existing sellers BEFORE overwriting to detect additions & approvals
+    let existingIds: string[] = [];
+    let existingSellers: any[] = [];
+    try {
+      const { data: legacyData } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_SELLERS').maybeSingle();
+      if (legacyData && legacyData.description) {
+        try {
+          const parsed = JSON.parse(legacyData.description);
+          if (Array.isArray(parsed)) {
+            existingSellers = parsed;
+            existingIds = parsed.map((s: any) => s.id);
+          }
+        } catch (pe) {}
+      }
+    } catch (e) {
+      console.error("[SELLER REGISTRATION] Error fetching existing state:", e);
+    }
+
+    // System backup write
+    try {
+      const payloadLegacy = { title: 'SYSTEM_SELLERS', description: JSON.stringify(sellers), visible: false };
+      const { data: legacyData } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_SELLERS').maybeSingle();
+      if (legacyData && legacyData.id) {
+         await getSupabase(req).from('promotions').update(payloadLegacy).eq('id', legacyData.id);
+      } else {
+         await getSupabase(req).from('promotions').insert([payloadLegacy]);
+      }
+    } catch (e) {}
+
+    // Detect newly created or newly active/approved sellers to provision and send credentials
+    try {
+      const { sendOrbiTalkDirectSMS, sendOrbiTalkDirectEmail } = await import("./talk.js");
+
+      for (const seller of sellers) {
+        const isNew = seller && seller.id && !existingIds.includes(seller.id);
+        const existingSeller = seller && seller.id ? existingSellers.find((e: any) => e.id === seller.id) : null;
+        const wasApprovedNow = seller && existingSeller && (seller.isApproved === true || seller.status === "active") && (existingSeller.isApproved === false || existingSeller.status !== "active");
+
+        if (isNew || wasApprovedNow) {
+          console.log(`[SELLER REGISTRATION RUN] Seller detected for credentials provisioning! ID: ${seller.id}, Name: ${seller.name}`);
+          
+          const password = seller.password || "123456";
+          const email = seller.email || "";
+          const phone = seller.invoicePhone || seller.phone || "";
+          const name = seller.name || "Vendor";
+
+          // 1. Provision user in Supabase Auth to allow logins immediately
+          if (email && password) {
+            console.log(`[SELLER REGISTRATION] Auto-registering/provisioning seller: ${email} with password`);
+            try {
+              const adminDb = getAdminSupabase();
+              const { data: { users }, error: listError } = await adminDb.auth.admin.listUsers();
+              if (!listError) {
+                const matchedUser = users?.find(u => u.email?.toLowerCase() === email.trim().toLowerCase());
+                if (matchedUser) {
+                  console.log(`[SELLER REGISTRATION] Seller ${email} already exists in Supabase Auth. Updating password and metadata...`);
+                  await adminDb.auth.admin.updateUserById(matchedUser.id, {
+                    password: password.trim(),
+                    user_metadata: {
+                      full_name: name,
+                      role: "seller"
+                    }
+                  });
+                } else {
+                  console.log(`[SELLER REGISTRATION] Creating new seller ${email} via Admin Auth...`);
+                  await adminDb.auth.admin.createUser({
+                    email: email.trim(),
+                    password: password.trim(),
+                    email_confirm: true,
+                    user_metadata: {
+                      full_name: name,
+                      role: "seller"
+                    }
+                  });
+                }
+              } else {
+                throw listError;
+              }
+            } catch (fallbackErr: any) {
+              console.log(`[SELLER REGISTRATION] Listing/admin creation failed, falling back to signUp:`, fallbackErr.message);
+              await getSupabase(req).auth.signUp({
+                email: email.trim(),
+                password: password.trim(),
+                options: {
+                  data: {
+                    full_name: name,
+                    role: "seller"
+                  }
+                }
+              }).then(({ data: signUpData, error: signUpError }) => {
+                if (signUpError) {
+                  console.log(`[SELLER REGISTRATION] Supabase Auth sign-up error or already exists:`, signUpError.message);
+                } else {
+                  console.log(`[SELLER REGISTRATION] Supabase Auth account provisioned successfully for:`, email);
+                }
+              }).catch(ae => {
+                console.log(`[SELLER REGISTRATION] Supabase Auth sign-up promise error:`, ae.message);
+              });
+            }
+          }
+
+          // 2. Draft and send Orbi Talk notifications with credentials
+          const subject = "Karibu Orbi Shop - Akaunti ya Muuzaji / Welcome to Orbi Shop Merchant Portal";
+          
+          const messageBodySw = `Sajili ya muuzaji imefanikiwa!\n\nJina la Duka: ${name}\nIngia kupitia Tovuti ya Wauzaji kwa:\nBarua pepe: ${email}\nNenosiri: ${password}\n\nTafadhali badili nenosiri lako mara utakapoingia kwa mara ya kwanza.\n\nAsante kwa kuamua kufanya biashara na Orbi Shop!`;
+          const messageBodyEn = `Merchant registration successful!\n\nStore Name: ${name}\nLog in to the Merchant Portal using:\nEmail/Username: ${email}\nPassword: ${password}\n\nPlease update your temporary password on your first sign-in.\n\nThank you for partnering with Orbi Shop!`;
+
+          const combinedBody = `${messageBodySw}\n\n---\n\n${messageBodyEn}`;
+
+          // Send SMS if a phone number exists
+          if (phone) {
+            const cleanPhone = phone.trim().replace(/\s+/g, "");
+            console.log(`[SELLER REGISTRATION RUN] Dispatching Welcome SMS to ${cleanPhone}`);
+            await sendOrbiTalkDirectSMS({
+              recipient: cleanPhone,
+              body: combinedBody,
+              requestId: `SLR_SMS_${seller.id}_${Date.now()}`
+            }).catch(err => console.error("Error sending direct SMS to seller:", err));
+          }
+
+          // Send Email if email exists
+          if (email) {
+            console.log(`[SELLER REGISTRATION RUN] Dispatching Welcome Email to ${email}`);
+            await sendOrbiTalkDirectEmail({
+              recipient: email.trim(),
+              subject: subject,
+              body: combinedBody,
+              requestId: `SLR_EML_${seller.id}_${Date.now()}`,
+              ownerEmail: "sellers@orbifinancial.com",
+              senderName: "Orbi Shop"
+            }).catch(err => console.error("Error sending direct Email to seller:", err));
+          }
+        } else if (existingSeller && seller.password && existingSeller.password !== seller.password) {
+          // Password has been changed by the Admin for an existing active seller!
+          console.log(`[SELLER PASSWORD UPDATE] Password change detected for seller ${seller.email}`);
+          const email = seller.email || "";
+          const password = seller.password;
+          if (email && password) {
+            try {
+              const adminDb = getAdminSupabase();
+              const { data: { users }, error: listError } = await adminDb.auth.admin.listUsers();
+              if (listError) throw listError;
+
+              const matchedUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+              if (matchedUser) {
+                console.log(`[SELLER PASSWORD UPDATE] Found user ID ${matchedUser.id} for email ${email}. Updating password...`);
+                const { error: authError } = await adminDb.auth.admin.updateUserById(matchedUser.id, {
+                  password: password.trim()
+                });
+                if (authError) {
+                  console.error(`[SELLER PASSWORD UPDATE] Failed to update password in Supabase Auth:`, authError.message);
+                } else {
+                  console.log(`[SELLER PASSWORD UPDATE] Successfully updated password in Supabase Auth for seller ${email}`);
+                }
+              } else {
+                console.log(`[SELLER PASSWORD UPDATE] Seller ${email} not found in Supabase Auth. Creating one...`);
+                const { error: createError } = await adminDb.auth.admin.createUser({
+                  email: email.trim(),
+                  password: password.trim(),
+                  email_confirm: true,
+                  user_metadata: {
+                    full_name: seller.name || "Vendor",
+                    role: "seller"
+                  }
+                });
+                if (createError) {
+                  console.error(`[SELLER PASSWORD UPDATE] Failed to create seller in Supabase Auth:`, createError.message);
+                } else {
+                  console.log(`[SELLER PASSWORD UPDATE] Successfully created seller in Supabase Auth for ${email}`);
+                }
+              }
+            } catch (err: any) {
+              console.error(`[SELLER PASSWORD UPDATE] Error processing password update for ${email}:`, err.message);
+            }
+          }
+        }
+      }
+    } catch (triggerError) {
+      console.error("[SELLER REGISTRATION TRIGGER ERROR]", triggerError);
+    }
+
+    // Sellers table write
+    try {
+      for (const seller of sellers) {
+        const isUuid = seller.id.length > 20 && seller.id.includes('-');
+        const row: any = {
+          name: seller.name,
+          description: seller.description,
+          avatar: seller.avatar || null,
+          banner: seller.banner || null,
+          is_pro: seller.isPro || false,
+          pro_until: seller.proUntil ? new Date(seller.proUntil).toISOString() : null,
+          email: seller.email || null,
+          active_plan_id: seller.activePlanId || null,
+          subscription_paid_at: seller.subscriptionPaidAt ? new Date(seller.subscriptionPaidAt).toISOString() : null,
+          status: seller.status || 'active',
+          block_reason: seller.blockReason || null,
+          delete_requested: seller.deleteRequested || false,
+          invoice_company_name: seller.invoiceCompanyName || null,
+          invoice_address: seller.invoiceAddress || null,
+          invoice_phone: seller.invoicePhone || null,
+          invoice_email: seller.invoiceEmail || null,
+          invoice_terms: seller.invoiceTerms || null,
+          pickup_address: seller.pickupAddress || seller.invoiceAddress || null,
+          pickup_place_id: seller.pickupPlaceId || null,
+          pickup_lat: seller.pickupLat ?? null,
+          pickup_lng: seller.pickupLng ?? null,
+          pickup_zone_id: seller.pickupZoneId || null,
+          legacy_id: !isUuid ? seller.id : undefined
+        };
+        
+        if (isUuid) {
+          row.id = seller.id;
+        } else {
+          const { data: found } = await getSupabase(req).from('sellers').select('id').eq('legacy_id', seller.id).maybeSingle();
+          if (found && found.id) {
+            row.id = found.id;
+          }
+        }
+        await getSupabase(req).from('sellers').upsert(row);
+      }
+
+      // Handle deletions
+      const { data: allDbSellers } = await getSupabase(req).from('sellers').select('id, legacy_id');
+      if (allDbSellers) {
+        const inputIds = sellers.map((s: any) => s.id);
+        const toDelete = allDbSellers.filter(dbS => {
+          if (dbS.id && inputIds.includes(dbS.id)) return false;
+          if (dbS.legacy_id && inputIds.includes(dbS.legacy_id)) return false;
+          return true;
+        });
+        for (const d of toDelete) {
+          await getSupabase(req).from('sellers').delete().eq('id', d.id);
+        }
+      }
+    } catch (e) {}
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put("/sellers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.description !== undefined) payload.description = updates.description;
+    if (updates.invoice_company_name !== undefined) payload.invoice_company_name = updates.invoice_company_name;
+    if (updates.invoice_address !== undefined) payload.invoice_address = updates.invoice_address;
+    if (updates.pickup_address !== undefined) payload.pickup_address = updates.pickup_address;
+    if (updates.pickup_place_id !== undefined) payload.pickup_place_id = updates.pickup_place_id;
+    if (updates.pickup_lat !== undefined) payload.pickup_lat = updates.pickup_lat;
+    if (updates.pickup_lng !== undefined) payload.pickup_lng = updates.pickup_lng;
+    if (updates.pickup_zone_id !== undefined) payload.pickup_zone_id = updates.pickup_zone_id;
+    if (updates.invoice_phone !== undefined) payload.invoice_phone = updates.invoice_phone;
+    if (updates.invoice_email !== undefined) payload.invoice_email = updates.invoice_email;
+    if (updates.invoice_terms !== undefined) payload.invoice_terms = updates.invoice_terms;
+    if (updates.tin !== undefined) payload.tin = updates.tin;
+    if (updates.avatar !== undefined) payload.avatar = updates.avatar;
+    if (updates.businessLogo !== undefined) payload.business_logo = updates.businessLogo;
+    if (updates.business_logo !== undefined) payload.business_logo = updates.business_logo;
+
+    let { error } = await getSupabase(req).from('sellers').update(payload).eq('id', id);
+    if (error && isSchemaCacheColumnError(error)) {
+      console.warn("[Settings API] Seller update hit schema cache column gap; retrying without optional location/logo columns:", error.message);
+      const safePayload = stripOptionalSellerColumns(payload);
+      if (Object.keys(safePayload).length > 0) {
+        const retry = await getSupabase(req).from('sellers').update(safePayload).eq('id', id);
+        error = retry.error;
+      } else {
+        error = null;
+      }
+      await mergeSellerBackupUpdate(req, id, updates).catch((backupErr) => {
+        console.warn("[Settings API] Seller backup merge failed:", backupErr?.message || backupErr);
+      });
+    }
+    if (error) throw error;
+    clearCachedValue("settings:sellers");
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. PAYOUTS
+router.get("/payouts", async (req, res) => {
+  return sendResilientJson(res, "settings:payouts", async () => {
+    let selectRes = await withTimeout(
+      getSupabase(req).from('payouts').select('*').order('requested_at', { ascending: false }),
+      12000,
+      "payouts query",
+    );
+    if (selectRes.error) throw selectRes.error;
+    const data = selectRes.data;
+
+    const mapped = (data || []).map(p => ({
+      id: p.id,
+      sellerId: p.seller_id,
+      amount: p.amount,
+      status: p.status,
+      requestedAt: new Date(p.requested_at).getTime(),
+      paidAt: p.paid_at ? new Date(p.paid_at).getTime() : undefined
+    }));
+    return mapped;
+  }, { ttlMs: 60000, timeoutMs: 15000, label: "payouts settings", retries: 1, fallback: [] });
+});
+
+router.post("/payouts", async (req, res) => {
+  try {
+    const payout = req.body;
+    const payload = {
+      seller_id: payout.sellerId,
+      amount: payout.amount,
+      status: payout.status,
+      paid_at: payout.paidAt ? new Date(payout.paidAt).toISOString() : null
+    };
+    if (payout.id && payout.id.length > 20) {
+      await getSupabase(req).from('payouts').update(payload).eq('id', payout.id);
+    } else {
+      await getSupabase(req).from('payouts').insert([payload]);
+    }
+    clearCachedValue("settings:payouts");
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. AI PILOT
+router.get("/ai-pilot", async (req, res) => {
+  try {
+    const defaultSettings = { autoApprove: true, autoCategorize: true, autoMessage: true, smartPromotion: true, securityMonitor: true };
+    const { data } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_AI_PILOT_SETTINGS').maybeSingle();
+    let settings = defaultSettings;
+    if (data && data.description) {
+      try {
+        settings = { ...defaultSettings, ...JSON.parse(data.description) };
+      } catch (e) {}
+    }
+    res.json({ success: true, data: settings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/ai-pilot", async (req, res) => {
+  try {
+    const settings = req.body;
+    const payload = {
+      title: 'SYSTEM_AI_PILOT_SETTINGS',
+      description: JSON.stringify(settings),
+      visible: false
+    };
+    const { data } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_AI_PILOT_SETTINGS').maybeSingle();
+    let error;
+    if (data && data.id) {
+       error = (await getSupabase(req).from('promotions').update(payload).eq('id', data.id)).error;
+    } else {
+       error = (await getSupabase(req).from('promotions').insert([payload])).error;
+    }
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 7. SUBSCRIPTION PLANS
+router.get("/subscription-plans", async (req, res) => {
+  try {
+    const { data } = await getSupabase(req).from('promotions').select('description').eq('title', 'SYSTEM_SUBSCRIPTION_PLANS').maybeSingle();
+    let plans = [
+      { id: 'sub-bronze', name: 'Bronze', nameSw: 'Shaba (Bronze)', price: 15000, days: 30, description: 'Basic listings, Standard support', descriptionSw: 'Orodha za msingi, Msaada wa kawaida', active: true },
+      { id: 'sub-silver', name: 'Silver', nameSw: 'Fedha (Silver)', price: 45000, days: 90, description: 'Higher search ordering, Standard branding', descriptionSw: 'Nafasi ya juu ya utafutaji, Nembo ya biashara', active: true },
+      { id: 'sub-gold', name: 'Gold', nameSw: 'Dhahabu (Gold)', price: 120000, days: 365, description: 'Top placement, VIP seller badge, Premium support', descriptionSw: 'Nafasi ya juu kabisa, Beji ya muuzaji wa VIP, Msaada wa haraka', active: true },
+    ];
+    if (data && data.description) {
+      try {
+        plans = JSON.parse(data.description);
+      } catch (e) {}
+    }
+    res.json({ success: true, data: plans });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/subscription-plans", async (req, res) => {
+  try {
+    const plans = req.body;
+    const payload = {
+      title: 'SYSTEM_SUBSCRIPTION_PLANS',
+      description: JSON.stringify(plans),
+      visible: false
+    };
+    const { data } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_SUBSCRIPTION_PLANS').maybeSingle();
+    let error;
+    if (data && data.id) {
+       error = (await getSupabase(req).from('promotions').update(payload).eq('id', data.id)).error;
+    } else {
+       error = (await getSupabase(req).from('promotions').insert([payload])).error;
+    }
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+export default router;

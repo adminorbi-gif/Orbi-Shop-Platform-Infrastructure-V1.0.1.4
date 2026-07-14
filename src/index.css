@@ -1,0 +1,523 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Roboto+Mono:wght@800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", var(--font-sans);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-money: "Roboto Mono", "JetBrains Mono", monospace;
+  --color-primary: #1e293b;
+  --color-accent: #f59e0b;
+  --color-success: #10b981;
+  --color-bg: #f8fafc;
+  --color-white: #f5f7fa;
+  --color-slate-50: #f1f5f9;
+  --color-slate-100: #e2e8f0;
+  --color-slate-200: #cbd5e1;
+  --color-slate-300: #94a3b8;
+  
+  --animate-heartbeat: heartbeat 1.5s ease-in-out infinite;
+
+  @keyframes heartbeat {
+    0%, 100% {
+      transform: scale(1);
+    }
+    14% {
+      transform: scale(1.15);
+    }
+    28% {
+      transform: scale(1);
+    }
+    42% {
+      transform: scale(1.15);
+    }
+    70% {
+      transform: scale(1);
+    }
+  }
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none; /* Prevents elastic Safari/Chrome pull-to-refresh on main container */
+  -webkit-touch-callout: none; /* Prevents callout sheet on long tap */
+  word-break: break-word;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+@media (display-mode: standalone) {
+  body {
+    background: #f8fafc;
+  }
+}
+
+.recharts-responsive-container {
+  min-width: 50px;
+  min-height: 50px;
+}
+
+@keyframes orbi-boot-logo {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.92;
+  }
+  50% {
+    transform: translateY(-2px) scale(1.045);
+    opacity: 1;
+  }
+}
+
+@keyframes orbi-boot-ring {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.92;
+  }
+}
+
+@keyframes orbi-install-rise {
+  from {
+    transform: translateY(1rem) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes orbi-delivery-slide {
+  0%,
+  21% {
+    transform: translateY(0);
+  }
+  25%,
+  46% {
+    transform: translateY(-25%);
+  }
+  50%,
+  71% {
+    transform: translateY(-50%);
+  }
+  75%,
+  96% {
+    transform: translateY(-75%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes orbi-delivery-truck-run {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  16% {
+    transform: translate3d(0.65px, -0.65px, 0) rotate(-1deg);
+  }
+  32% {
+    transform: translate3d(1.6px, 0, 0) rotate(0.7deg);
+  }
+  48% {
+    transform: translate3d(0.65px, 0.65px, 0) rotate(0deg);
+  }
+}
+
+.orbi-delivery-truck-wrap {
+  display: inline-flex;
+  width: 0.82rem;
+  overflow: visible;
+}
+
+.orbi-delivery-truck {
+  transform-origin: 50% 70%;
+  animation: orbi-delivery-truck-run 4.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation-delay: var(--orbi-delivery-truck-delay, 0s);
+}
+
+.orbi-delivery-rotator {
+  display: inline-block;
+  height: 1.15em;
+  max-width: min(100%, 9.75rem);
+  overflow: hidden;
+  vertical-align: text-bottom;
+}
+
+.orbi-delivery-rotator-track {
+  display: flex;
+  flex-direction: column;
+  animation: orbi-delivery-slide var(--orbi-delivery-slide-duration, 18s) cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  animation-delay: var(--orbi-delivery-slide-delay, 0s);
+}
+
+.orbi-delivery-rotator-track--static {
+  animation: none;
+}
+
+.orbi-delivery-rotator-item {
+  display: block;
+  height: 1.15em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbi-delivery-rotator-track,
+  .orbi-delivery-truck {
+    animation: none;
+  }
+}
+
+.orbi-admin-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16.5rem), 1fr));
+  gap: clamp(0.9rem, 1.7vw, 1.35rem);
+}
+
+.orbi-admin-card {
+  min-width: 0;
+  min-height: clamp(5.4rem, 15cqw, 7.25rem);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+    radial-gradient(circle at 100% 0%, rgba(249, 115, 22, 0.08), transparent 11rem);
+  box-shadow:
+    0 18px 42px rgba(15, 23, 42, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.82) inset;
+}
+
+.orbi-admin-label {
+  font-size: clamp(0.46rem, 3.6cqw, 0.62rem);
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  text-wrap: balance;
+}
+
+.orbi-admin-metric-value {
+  font-size: clamp(0.95rem, 13cqw, 1.55rem);
+  line-height: 1.04;
+  letter-spacing: -0.045em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+  text-wrap: balance;
+}
+
+.orbi-dashboard-stat-card {
+  min-height: clamp(4.75rem, 10cqw, 5.6rem);
+  max-height: 6.25rem;
+}
+
+.orbi-dashboard-stat-card .orbi-admin-label {
+  font-size: clamp(0.44rem, 3.2cqw, 0.58rem);
+  line-height: 1.08;
+  letter-spacing: 0.08em;
+}
+
+.orbi-dashboard-stat-card .orbi-admin-metric-value {
+  font-size: clamp(0.98rem, 10.5cqw, 1.48rem);
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.orbi-dashboard-stat-card .orbi-admin-metric-value .orbi-price-display,
+.orbi-dashboard-stat-card .orbi-admin-metric-value [class*="PriceDisplay"] {
+  max-width: 100%;
+}
+
+.seller-dashboard-hero {
+  background:
+    radial-gradient(circle at 96% 0%, rgba(37, 99, 235, 0.12), transparent 14rem),
+    radial-gradient(circle at 70% 100%, rgba(15, 23, 42, 0.06), transparent 12rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+.seller-stat-card {
+  min-height: clamp(6.4rem, 15cqw, 7.5rem);
+  height: auto;
+}
+
+.seller-stat-label {
+  font-size: clamp(0.48rem, 2.9cqw, 0.58rem);
+  line-height: 1.14;
+  letter-spacing: 0.07em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.seller-stat-value {
+  font-size: clamp(0.9rem, 8.8cqw, 1.34rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
+
+.seller-stat-value .orbi-price-display,
+.seller-stat-value [class*="PriceDisplay"] {
+  max-width: 100%;
+}
+
+.orbi-admin-compact-value {
+  font-size: clamp(0.95rem, 14cqw, 1.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
+
+.orbi-product-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: clamp(5px, calc(1vw - 3px), 7px);
+}
+
+.orbi-market-product-card {
+  position: relative;
+  min-width: 0;
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: border-color 0.2s ease-in-out !important;
+}
+
+.orbi-market-product-card:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.orbi-product-image-stage {
+  background: transparent;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  padding: 5px;
+}
+
+.orbi-product-image-stage > div:not(.absolute),
+.orbi-product-image-stage > img:not(.absolute),
+.orbi-product-image-stage > video:not(.absolute) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.orbi-product-title {
+  min-height: 2.5em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.orbi-product-price {
+  max-width: 100%;
+  font-size: clamp(0.9rem, 1.85vw, 1.12rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.orbi-product-detail-shell {
+  background: #f8fafc;
+}
+
+.orbi-product-detail-hero {
+  background: #ffffff;
+  border: none;
+  border-radius: 1.5rem;
+  box-shadow: 0 4px 24px -2px rgba(15, 23, 42, 0.05);
+}
+
+.orbi-product-detail-media {
+  background: #ffffff;
+  border: none;
+  border-radius: 1.25rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.orbi-product-buy-panel,
+.orbi-product-detail-card {
+  background: #ffffff;
+  border: none;
+  border-radius: 1.5rem;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+
+.orbi-detail-price {
+  font-size: clamp(2rem, 5vw, 3.35rem);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.orbi-detail-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+@media (min-width: 1024px) {
+  .orbi-detail-section-grid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.75fr);
+  }
+}
+
+@media (min-width: 640px) {
+  .orbi-product-list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+@media (min-width: 430px) and (max-width: 639px) {
+  .orbi-product-list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  
+  .orbi-product-price {
+    font-size: clamp(0.82rem, 3.1vw, 0.98rem);
+  }
+}
+
+@media (max-width: 429px) {
+  .orbi-product-list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .orbi-product-price {
+    font-size: clamp(0.82rem, 4vw, 1rem);
+  }
+}
+
+@media (min-width: 1280px) {
+  .orbi-product-list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .orbi-admin-auto-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .orbi-admin-card {
+    min-height: 8.5rem;
+  }
+}
+/* Eliminate native tap overlay and selection issues to feel like standard compiled mobile apps */
+button,
+a,
+select,
+input[type="button"],
+input[type="submit"],
+[role="button"],
+.interactive-tap {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation; /* Improves response speed on double-tap actions */
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes statusHighlight {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); border-color: rgba(245, 158, 11, 1); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 15px rgba(245, 158, 11, 0); border-color: rgba(245, 158, 11, 0.3); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); border-color: inherit; }
+}
+
+@keyframes flashSuccess {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(16, 185, 129, 0.15); }
+}
+
+.animate-marquee {
+  animation: marquee 25s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+.animate-status-update {
+  animation: statusHighlight 1.8s ease-in-out 3;
+}
+
+.animate-status-flash {
+  animation: flashSuccess 2s ease-in-out;
+}
+
+/* Hide scrollbars on mobile screens for modern touch experience */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  * {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
+}
+
+.overflow-x-auto, .overflow-x-scroll,
+.no-scrollbar {
+  overscroll-behavior-x: contain;
+}
+
+.overflow-y-auto, .overflow-y-scroll,
+.custom-scrollbar {
+  overscroll-behavior-y: contain;
+}
+.font-jakarta {
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > main:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(6) > a:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > span:nth-of-type(1) {
+  border-color: #90a1b8;
+}
+
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

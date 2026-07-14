@@ -1,0 +1,772 @@
+import { Router } from "express";
+import { getSupabase, supabase } from "../lib/supabase.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { sendOrbiTalkDirectEmail, sendOrbiTalkDirectSMS } from "./talk.js";
+import { inferProductDeliveryPolicy, shouldAutoInferDeliveryPolicy } from "../lib/productDeliveryPolicy.js";
+import { clearCachedValue, sendResilientJson, withTimeout } from "../lib/apiResilience.js";
+
+const router = Router();
+
+function normalizeProductStock(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeMoney(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildProductUrl(productId: string) {
+  const appUrl = (process.env.APP_URL || "https://shop.orbifinancial.com").replace(/\/$/, "");
+  return `${appUrl}/#/products?product=${encodeURIComponent(productId)}`;
+}
+
+async function dispatchBackInStockNotifications(product: any) {
+  try {
+    const productId = String(product?.id || "");
+    if (!productId) return;
+
+    const { data: pending, error } = await supabase
+      .from("stock_notifications")
+      .select("id, email, phone_number, phone, notified")
+      .eq("product_id", productId)
+      .eq("notified", false)
+      .limit(250);
+
+    if (error) {
+      console.warn("[Stock Automation] Failed to load pending stock notifications:", error.message);
+      return;
+    }
+
+    const notifications = pending || [];
+    if (notifications.length === 0) return;
+
+    const productName = product?.name || "Bidhaa uliyoomba";
+    const productUrl = buildProductUrl(productId);
+    const subject = `${productName} imerudi dukani`;
+    const body = [
+      `Habari,`,
+      ``,
+      `${productName} imerudi kwenye stock ya Orbi Shop.`,
+      `Unaweza kuiangalia na kuagiza hapa: ${productUrl}`,
+      ``,
+      `Asante kwa kutumia Orbi Shop.`
+    ].join("\n");
+
+    for (const notice of notifications) {
+      const requestId = `stock-return-${productId}-${notice.id}`;
+      const email = typeof notice.email === "string" ? notice.email.trim() : "";
+      const phone = String(notice.phone_number || notice.phone || "").trim();
+      let delivered = false;
+      let lastError = "";
+
+      if (email) {
+        const result = await sendOrbiTalkDirectEmail({
+          recipient: email,
+          subject,
+          body,
+          requestId,
+          senderName: "ORBI Shop",
+          senderEmail: "shop@orbifinancial.com",
+          messageType: "transactional"
+        });
+        delivered = Boolean(result?.success);
+        lastError = result?.error || "";
+      }
+
+      if (phone) {
+        const result = await sendOrbiTalkDirectSMS({
+          recipient: phone,
+          body: `${productName} imerudi kwenye stock. Agiza hapa: ${productUrl}`,
+          requestId: `${requestId}-sms`
+        });
+        delivered = delivered || Boolean(result?.success);
+        lastError = result?.error || lastError;
+      }
+
+      if (delivered) {
+        const updateResult = await supabase
+          .from("stock_notifications")
+          .update({ notified: true, notified_at: new Date().toISOString(), last_error: null })
+          .eq("id", notice.id);
+        if (updateResult.error) {
+          await supabase
+            .from("stock_notifications")
+            .update({ notified: true })
+            .eq("id", notice.id);
+        }
+      } else if (lastError) {
+        const updateResult = await supabase
+          .from("stock_notifications")
+          .update({ last_error: lastError })
+          .eq("id", notice.id);
+        if (updateResult.error) {
+          console.warn("[Stock Automation] Failed to persist stock notification error:", updateResult.error.message);
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error("[Stock Automation] Back-in-stock dispatch failed:", error.message || error);
+  }
+}
+
+async function dispatchPriceDropNotifications(product: any, previousPrice: number, nextPrice: number) {
+  try {
+    const productId = String(product?.id || "");
+    if (!productId || !(previousPrice > nextPrice)) return;
+
+    const { data: pending, error } = await supabase
+      .from("price_alerts")
+      .select("id, email, phone, notified, target_price")
+      .eq("product_id", productId)
+      .eq("notified", false)
+      .limit(250);
+
+    if (error) {
+      console.warn("[Price Alert Automation] Failed to load pending price alerts:", error.message);
+      return;
+    }
+
+    const alerts = (pending || []).filter((alert: any) => {
+      const target = normalizeMoney(alert.target_price);
+      return target <= 0 || nextPrice <= target;
+    });
+    if (alerts.length === 0) return;
+
+    const productName = product?.name || "Bidhaa uliyoomba";
+    const productUrl = buildProductUrl(productId);
+    const priceText = `TSh ${Math.round(nextPrice).toLocaleString("en-US")}`;
+    const subject = `${productName} imeshuka bei`;
+    const body = [
+      `Habari,`,
+      ``,
+      `${productName} imeshuka bei hadi ${priceText}.`,
+      `Unaweza kuiangalia na kuagiza hapa: ${productUrl}`,
+      ``,
+      `Asante kwa kutumia Orbi Shop.`
+    ].join("\n");
+
+    for (const alert of alerts) {
+      const requestId = `price-drop-${productId}-${alert.id}`;
+      const email = typeof alert.email === "string" ? alert.email.trim() : "";
+      const phone = String(alert.phone || "").trim();
+      let delivered = false;
+      let lastError = "";
+
+      if (email) {
+        const result = await sendOrbiTalkDirectEmail({
+          recipient: email,
+          subject,
+          body,
+          requestId,
+          senderName: "ORBI Shop",
+          senderEmail: "shop@orbifinancial.com",
+          messageType: "transactional"
+        });
+        delivered = Boolean(result?.success);
+        lastError = result?.error || "";
+      }
+
+      if (phone) {
+        const result = await sendOrbiTalkDirectSMS({
+          recipient: phone,
+          body: `${productName} imeshuka bei hadi ${priceText}. Agiza hapa: ${productUrl}`,
+          requestId: `${requestId}-sms`
+        });
+        delivered = delivered || Boolean(result?.success);
+        lastError = result?.error || lastError;
+      }
+
+      if (delivered) {
+        const updateResult = await supabase
+          .from("price_alerts")
+          .update({ notified: true, notified_at: new Date().toISOString(), current_price: nextPrice, last_error: null })
+          .eq("id", alert.id);
+        if (updateResult.error) {
+          await supabase
+            .from("price_alerts")
+            .update({ notified: true })
+            .eq("id", alert.id);
+        }
+      } else if (lastError) {
+        const updateResult = await supabase
+          .from("price_alerts")
+          .update({ last_error: lastError })
+          .eq("id", alert.id);
+        if (updateResult.error) {
+          console.warn("[Price Alert Automation] Failed to persist price alert error:", updateResult.error.message);
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error("[Price Alert Automation] Dispatch failed:", error.message || error);
+  }
+}
+
+// GET /api/v1/products/wholesale-deals - Fetch dynamic mixed-niche wholesale deals
+router.get("/wholesale-deals", async (req, res) => {
+  try {
+    const supabaseClient = getSupabase(req);
+    const selectRes = await withTimeout(
+      supabaseClient.from('products').select('*').order('created_at', { ascending: false }).limit(1000),
+      12000,
+      "wholesale-deals products query"
+    );
+    if (selectRes.error) throw selectRes.error;
+
+    const data = selectRes.data || [];
+    const mapped = data.map(p => {
+      const catRaw = typeof p.category === 'string' ? p.category : '';
+      const parts = catRaw.split('::');
+      const niche = parts.length > 0 ? parts[0] : 'Electronics';
+      const category = parts.length > 1 ? parts[1] : '';
+      const family = parts.length > 2 ? parts[2] : '';
+
+      const tagsList = Array.isArray(p.tags) ? p.tags : [];
+      const sellerTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('seller_id:'));
+      const parsedSellerId = p.seller_id || (sellerTag ? sellerTag.split(':')[1] : undefined);
+
+      const skuTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('sku:'));
+      const parsedSku = skuTag ? skuTag.substring(4) : undefined;
+
+      const warrantyTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('warranty:'));
+      const parsedWarranty = p.warranty || (warrantyTag ? warrantyTag.substring(9) : undefined);
+
+      return {
+        id: p.id,
+        name: p.name || 'Unnamed',
+        nameSw: p.name_sw || p.name_swahili || p.nameSw || undefined,
+        niche: niche,
+        category: category,
+        family: family,
+        price: Number(p.price) || 0,
+        oldPrice: p.old_price ? Number(p.old_price) : null,
+        stock: Number(p.stock) || 0,
+        soldBy: p.sold_by || "Piece",
+        description: p.description || '',
+        tags: tagsList,
+        images: Array.isArray(p.images) ? p.images : [],
+        visible: Boolean(p.visible),
+        createdAt: new Date(p.created_at || Date.now()).getTime(),
+        sellerId: parsedSellerId,
+        sku: parsedSku,
+        warranty: parsedWarranty,
+        features: Array.isArray(p.features) ? p.features : [],
+        wholesaleTiers: Array.isArray(p.wholesale_tiers) ? p.wholesale_tiers : [],
+        weightKg: Number(p.weight_kg || 1),
+        lengthCm: p.length_cm === null || p.length_cm === undefined ? undefined : Number(p.length_cm),
+        brokerId: p.broker_id || undefined,
+        brokerCommissionPercent: p.broker_commission_percent ? Number(p.broker_commission_percent) : 0,
+        widthCm: p.width_cm === null || p.width_cm === undefined ? undefined : Number(p.width_cm),
+        heightCm: p.height_cm === null || p.height_cm === undefined ? undefined : Number(p.height_cm),
+        deliveryClass: p.delivery_class || 'standard',
+        fragile: Boolean(p.fragile),
+        oversized: Boolean(p.oversized),
+        requiresColdChain: Boolean(p.requires_cold_chain),
+        hazardous: Boolean(p.hazardous),
+        digitalProduct: Boolean(p.digital_product),
+        requiresDeliveryQuote: Boolean(p.requires_delivery_quote),
+        deliveryScope: p.delivery_scope || 'national',
+        deliveryPolicySource: p.delivery_policy_source || 'auto',
+        deliveryHandlingNotes: p.delivery_handling_notes || '',
+        blockedDeliveryZoneIds: Array.isArray(p.blocked_delivery_zone_ids) ? p.blocked_delivery_zone_ids : [],
+        sellerOriginZoneId: p.seller_origin_zone_id || undefined
+      };
+    });
+
+    // Filter down to visible wholesale products
+    const wholesaleItems = mapped.filter(p => 
+      p.visible !== false && (
+        (p.wholesaleTiers && p.wholesaleTiers.length > 0) || 
+        (p.tags && p.tags.some(t => t.toLowerCase().includes("wholesale") || t.toLowerCase().includes("bulk"))) ||
+        p.category?.toLowerCase() === "wholesale" ||
+        p.niche?.toLowerCase() === "wholesale"
+      )
+    );
+
+    // If there aren't enough wholesale items, fall back to visible products to complete the layout
+    let pool = [...wholesaleItems];
+    if (pool.length < 10) {
+      const existingIds = new Set(pool.map(p => p.id));
+      const fallbacks = mapped.filter(p => p.visible !== false && !existingIds.has(p.id));
+      pool = [...pool, ...fallbacks];
+    }
+
+    // Now, let's group them by Niche to ensure we get a diverse mix of niches
+    const groupedByNiche: Record<string, typeof pool> = {};
+    pool.forEach(p => {
+      const nicheKey = p.niche || "Mengineyo";
+      if (!groupedByNiche[nicheKey]) {
+        groupedByNiche[nicheKey] = [];
+      }
+      groupedByNiche[nicheKey].push(p);
+    });
+
+    // Shuffle the products within each niche group to make it dynamic
+    const niches = Object.keys(groupedByNiche);
+    niches.forEach(n => {
+      groupedByNiche[n] = groupedByNiche[n].sort(() => Math.random() - 0.5);
+    });
+
+    // Round-robin selection across niches to create a diverse mix
+    const mixedList: typeof pool = [];
+    let hasMore = true;
+    let index = 0;
+    while (hasMore) {
+      hasMore = false;
+      for (const niche of niches) {
+        if (groupedByNiche[niche].length > index) {
+          mixedList.push(groupedByNiche[niche][index]);
+          hasMore = true;
+        }
+      }
+      index++;
+    }
+
+    res.json({ success: true, data: mixedList.slice(0, 12) });
+  } catch (error: any) {
+    console.error("GET /api/v1/products/wholesale-deals error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/v1/products - Fetch all products
+router.get("/", async (req, res) => {
+  return sendResilientJson(res, "products:list", async () => {
+    let selectRes = await withTimeout(
+      getSupabase(req).from('products').select('*').order('created_at', { ascending: false }).limit(1000),
+      12000,
+      "products query",
+    );
+    if (selectRes.error) throw selectRes.error;
+
+    const data = selectRes.data;
+    const mapped = (data || []).map(p => {
+      const catRaw = typeof p.category === 'string' ? p.category : '';
+      const parts = catRaw.split('::');
+      const niche = parts.length > 0 ? parts[0] : 'Electronics';
+      const category = parts.length > 1 ? parts[1] : '';
+      const family = parts.length > 2 ? parts[2] : '';
+
+      const tagsList = Array.isArray(p.tags) ? p.tags : [];
+      const sellerTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('seller_id:'));
+      const parsedSellerId = p.seller_id || (sellerTag ? sellerTag.split(':')[1] : undefined);
+
+      const skuTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('sku:'));
+      const parsedSku = skuTag ? skuTag.substring(4) : undefined;
+
+      const warrantyTag = tagsList.find((t: string) => typeof t === 'string' && t.startsWith('warranty:'));
+      const parsedWarranty = p.warranty || (warrantyTag ? warrantyTag.substring(9) : undefined);
+
+      return {
+        id: p.id,
+        name: p.name || 'Unnamed',
+        niche: niche,
+        category: category,
+        family: family,
+        price: Number(p.price) || 0,
+        oldPrice: p.old_price ? Number(p.old_price) : null,
+        stock: Number(p.stock) || 0,
+        soldBy: p.sold_by || "Piece",
+        description: p.description || '',
+        tags: tagsList,
+        images: Array.isArray(p.images) ? p.images : [],
+        visible: Boolean(p.visible),
+        createdAt: new Date(p.created_at || Date.now()).getTime(),
+        sellerId: parsedSellerId,
+        sku: parsedSku,
+        warranty: parsedWarranty,
+        features: Array.isArray(p.features) ? p.features : [],
+        wholesaleTiers: Array.isArray(p.wholesale_tiers) ? p.wholesale_tiers : [],
+        weightKg: Number(p.weight_kg || 1),
+        lengthCm: p.length_cm === null || p.length_cm === undefined ? undefined : Number(p.length_cm),
+        brokerId: p.broker_id || undefined,
+        brokerCommissionPercent: p.broker_commission_percent ? Number(p.broker_commission_percent) : 0,
+        widthCm: p.width_cm === null || p.width_cm === undefined ? undefined : Number(p.width_cm),
+        heightCm: p.height_cm === null || p.height_cm === undefined ? undefined : Number(p.height_cm),
+        deliveryClass: p.delivery_class || 'standard',
+        fragile: Boolean(p.fragile),
+        oversized: Boolean(p.oversized),
+        requiresColdChain: Boolean(p.requires_cold_chain),
+        hazardous: Boolean(p.hazardous),
+        digitalProduct: Boolean(p.digital_product),
+        requiresDeliveryQuote: Boolean(p.requires_delivery_quote),
+        deliveryScope: p.delivery_scope || 'national',
+        deliveryPolicySource: p.delivery_policy_source || 'auto',
+        deliveryHandlingNotes: p.delivery_handling_notes || '',
+        blockedDeliveryZoneIds: Array.isArray(p.blocked_delivery_zone_ids) ? p.blocked_delivery_zone_ids : [],
+        sellerOriginZoneId: p.seller_origin_zone_id || undefined
+      };
+    });
+
+    return mapped;
+  }, { ttlMs: 60000, timeoutMs: 15000, label: "products list", retries: 1, fallback: [] });
+});
+
+// POST /api/v1/products - Create/Update product
+router.post("/", requireAuth, requireRole("admin", "seller"), async (req, res) => {
+  try {
+    const product = req.body;
+    const isExistingProduct = Boolean(product.id && !product.id.startsWith('PRD-') && product.id.length > 20);
+    let previousStock = 0;
+    let previousPrice = 0;
+
+    if (isExistingProduct) {
+      const previous = await supabase
+        .from("products")
+        .select("id, stock, price")
+        .eq("id", product.id)
+        .maybeSingle();
+      if (!previous.error && previous.data) {
+        previousStock = normalizeProductStock(previous.data.stock);
+        previousPrice = normalizeMoney(previous.data.price);
+      }
+    }
+
+    const trySave = async (withVisible: boolean, useServiceRole = false) => {
+      let finalTags = product.tags ? [...product.tags] : [];
+      if (product.sellerId) {
+        finalTags = finalTags.filter((t: string) => !t.startsWith('seller_id:'));
+        finalTags.push(`seller_id:${product.sellerId}`);
+      }
+      if (product.sku) {
+        finalTags = finalTags.filter((t: string) => !t.startsWith('sku:'));
+        finalTags.push(`sku:${product.sku}`);
+      }
+      if (product.warranty) {
+        finalTags = finalTags.filter((t: string) => !t.startsWith('warranty:'));
+        finalTags.push(`warranty:${product.warranty}`);
+      }
+      const deliveryPolicy = shouldAutoInferDeliveryPolicy(product)
+        ? inferProductDeliveryPolicy(product)
+        : {
+            deliveryClass: product.deliveryClass || "standard",
+            weightKg: Math.max(0, Number(product.weightKg || 1)),
+            fragile: Boolean(product.fragile),
+            oversized: Boolean(product.oversized),
+            requiresColdChain: Boolean(product.requiresColdChain),
+            hazardous: Boolean(product.hazardous),
+            digitalProduct: Boolean(product.digitalProduct),
+            requiresDeliveryQuote: Boolean(product.requiresDeliveryQuote),
+            deliveryScope: product.deliveryScope || "national",
+            deliveryPolicySource: product.deliveryPolicySource || "manual",
+            deliveryHandlingNotes: product.deliveryHandlingNotes || "",
+          };
+
+      const payload: any = {
+        name: product.name,
+        category: `${product.niche || 'Electronics'}::${product.category || ''}::${product.family || ''}`,
+        price: product.price,
+        old_price: product.oldPrice === undefined ? null : product.oldPrice,
+        stock: product.stock,
+        sold_by: product.soldBy,
+        description: product.description,
+        features: Array.isArray(product.features) ? product.features : [],
+        wholesale_tiers: Array.isArray(product.wholesaleTiers) ? product.wholesaleTiers : [],
+        weight_kg: Math.max(0, Number(deliveryPolicy.weightKg || product.weightKg || 1)),
+        length_cm: product.lengthCm === undefined || product.lengthCm === "" ? null : Math.max(0, Number(product.lengthCm || 0)),
+        width_cm: product.widthCm === undefined || product.widthCm === "" ? null : Math.max(0, Number(product.widthCm || 0)),
+        height_cm: product.heightCm === undefined || product.heightCm === "" ? null : Math.max(0, Number(product.heightCm || 0)),
+        delivery_class: String(deliveryPolicy.deliveryClass || "standard").toLowerCase(),
+        fragile: Boolean(deliveryPolicy.fragile),
+        oversized: Boolean(deliveryPolicy.oversized),
+        requires_cold_chain: Boolean(deliveryPolicy.requiresColdChain),
+        hazardous: Boolean(deliveryPolicy.hazardous),
+        digital_product: Boolean(deliveryPolicy.digitalProduct),
+        requires_delivery_quote: Boolean(deliveryPolicy.requiresDeliveryQuote),
+        delivery_scope: deliveryPolicy.deliveryScope || "national",
+        delivery_policy_source: deliveryPolicy.deliveryPolicySource || "auto",
+        delivery_handling_notes: deliveryPolicy.deliveryHandlingNotes || "",
+        blocked_delivery_zone_ids: Array.isArray(product.blockedDeliveryZoneIds) ? product.blockedDeliveryZoneIds.map(String) : [],
+        seller_origin_zone_id: product.sellerOriginZoneId || null,
+        tags: finalTags,
+        images: product.images,
+        broker_id: product.brokerId || null,
+        broker_commission_percent: Number(product.brokerCommissionPercent || 0),
+        legacy_id: product.id?.includes('-') ? product.id : undefined
+      };
+      if (withVisible) {
+        payload.visible = product.visible;
+      }
+
+      const activeClient = useServiceRole ? supabase : getSupabase(req);
+
+      if (isExistingProduct) {
+        return activeClient.from('products').update(payload).eq('id', product.id).select().single();
+      } else {
+        return activeClient.from('products').insert([payload]).select().single();
+      }
+    };
+
+    let result = await trySave(true, false);
+    if (result.error) {
+      if (result.error.code === 'PGRST204') {
+        result = await trySave(false, false);
+      } else {
+        console.warn(`[Products API] User client write failed with code ${result.error.code} (${result.error.message}). Retrying write with service-role admin access...`);
+        result = await trySave(true, true);
+        if (result.error && result.error.code === 'PGRST204') {
+          result = await trySave(false, true);
+        }
+      }
+    }
+
+    if (result.error) throw result.error;
+    clearCachedValue("products:");
+    const nextStock = normalizeProductStock(result.data?.stock ?? product.stock);
+    
+    // Enterprise: Immutable Inventory Ledger
+    if (!isExistingProduct || previousStock !== nextStock) {
+      try {
+        const movementType = !isExistingProduct ? 'in' : (nextStock > previousStock ? 'adjustment' : 'adjustment');
+        const quantityChange = !isExistingProduct ? nextStock : (nextStock - previousStock);
+        await supabase.from('inventory_movements').insert({
+          product_id: result.data?.id || product.id,
+          movement_type: movementType,
+          quantity_change: quantityChange,
+          reference_id: 'admin_dashboard_update',
+          actor_id: (req as any).user?.id || null,
+          notes: 'Stock updated via admin dashboard'
+        });
+      } catch (movErr: any) {
+        console.error("[Inventory Ledger] Failed to create movement record:", movErr.message || movErr);
+      }
+    }
+
+    const nextPrice = normalizeMoney(result.data?.price ?? product.price);
+    if (previousStock <= 0 && nextStock > 0) {
+      dispatchBackInStockNotifications(result.data).catch((notifyErr) => {
+        console.error("[Stock Automation] Async dispatch failed:", notifyErr?.message || notifyErr);
+      });
+    }
+    if (previousPrice > nextPrice) {
+      dispatchPriceDropNotifications(result.data, previousPrice, nextPrice).catch((notifyErr) => {
+        console.error("[Price Alert Automation] Async dispatch failed:", notifyErr?.message || notifyErr);
+      });
+    }
+    res.json({ success: true, id: result.data.id });
+  } catch (error: any) {
+    console.error("POST /api/v1/products error:", error.message || error);
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// DELETE /api/v1/products/:id - Delete continuous product
+router.delete("/:id", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { error } = await getSupabase(req).from('products').delete().eq('id', id);
+    if (error) {
+      console.warn(`[Products API] User client delete failed: ${error.message}. Retrying with service-role admin access...`);
+      const retry = await supabase.from('products').delete().eq('id', id);
+      error = retry.error;
+    }
+    if (error) throw error;
+    clearCachedValue("products:");
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("DELETE /api/v1/products/:id error:", error.message || error);
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// DELETE /api/v1/products/niche/:niche - Delete products under target niche
+router.delete("/niche/:niche", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { niche } = req.params;
+    let { error } = await getSupabase(req).from('products').delete().like('category', `${niche}::%`);
+    if (error) {
+      console.warn(`[Products API] User client delete-by-niche failed: ${error.message}. Retrying with service-role admin access...`);
+      const retry = await supabase.from('products').delete().like('category', `${niche}::%`);
+      error = retry.error;
+    }
+    if (error) throw error;
+    clearCachedValue("products:");
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("DELETE /api/v1/products/niche/:niche error:", error.message || error);
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// UPDATE /api/v1/products/niche/rename - Rename niche in products
+router.post("/niche/rename", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { oldNiche, newNiche } = req.body;
+    if (!oldNiche || !newNiche) {
+      return res.status(400).json({ success: false, error: "Missing oldNiche or newNiche" });
+    }
+
+    // Since Supabase doesn't have a direct string replace for update without SQL function,
+    // we fetch all matching products, and update them.
+    let fetchRes = await getSupabase(req).from('products').select('id, category').like('category', `${oldNiche}::%`);
+    if (fetchRes.error) throw fetchRes.error;
+
+    const products = fetchRes.data;
+    if (products && products.length > 0) {
+      for (const p of products) {
+        let newCategoryStr = p.category;
+        if (p.category && p.category.startsWith(`${oldNiche}::`)) {
+          newCategoryStr = p.category.replace(`${oldNiche}::`, `${newNiche}::`);
+          let { error: updateErr } = await getSupabase(req).from('products').update({ category: newCategoryStr }).eq('id', p.id);
+          if (updateErr) throw updateErr;
+        }
+      }
+    }
+
+    clearCachedValue("products:");
+    res.json({ success: true, updatedCount: products?.length || 0 });
+  } catch (error: any) {
+    console.error("POST /api/v1/products/niche/rename error:", error.message || error);
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+import { getGeminiClient } from "../lib/gemini.js";
+
+function getGemini() {
+  return getGeminiClient();
+}
+
+// POST /api/v1/products/ai-suggest-description - Suggest e-commerce copy via Gemini
+router.post("/ai-suggest-description", requireAuth, requireRole("admin", "seller"), async (req, res) => {
+  try {
+    const { name, category, niche, tags } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: "Product name is required for AI suggestions" });
+    }
+
+    const ai = getGemini();
+    const prompt = `You are a professional e-commerce copywriter in Tanzania. Write a compelling, high-converting product description and a list of key technical or comparative features for:
+- Product Name: ${name}
+- Niche Scope: ${niche || "General"}
+- Sub-category: ${category || "General"}
+- Extra keywords/tags: ${tags ? tags.join(", ") : "None"}
+
+Requirements:
+1. "description": Provide a beautiful bilingual layout: first a passionate block in friendly, engaging Swahili/Kiswahili, followed by an elegant block in English. The description should detail its premium quality, utility, and appeal to Tanzanian shoppers. Total word count should be around 100-150 words. Format with clean line breaks so it looks professional in a store product detail box. Use bullet points for key features if applicable within the description block.
+2. "features": Generate 3 to 6 key comparative features (specs) that a buyer would look for in a comparison table for this type of product. Each feature should have a "name" (e.g., "Voltage", "Material", "Storage Capacity") and a "description" (e.g., "220V AC", "Premium Leather", "256GB SSD").
+
+Respond ONLY with a valid JSON object matching this schema:
+{
+  "description": "The product description string...",
+  "features": [
+    { "name": "Feature Name", "description": "Feature Value" }
+  ]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    try {
+      const data = JSON.parse(response.text);
+      res.json({ success: true, description: data.description, features: data.features });
+    } catch (e) {
+      res.json({ success: true, description: response.text });
+    }
+  } catch (error: any) {
+    console.error("POST /api/v1/products/ai-suggest-description error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// POST /api/v1/products/ai-suggest-niche - Suggest niche and category based on name and description
+router.post("/ai-suggest-niche", requireAuth, requireRole("admin", "seller"), async (req, res) => {
+  try {
+    const { name, description, availableNiches } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: "Product name is required for Niche suggestions" });
+    }
+
+    const ai = getGemini();
+
+    const formattedNiches = (availableNiches || []).map((n: any) => {
+      const catsInfo = (n.categories || []).map((c: any) => {
+        const catName = typeof c === 'string' ? c : c.name;
+        const families = Array.isArray(c.families) ? c.families.join(", ") : "None";
+        return `${catName} (Families: ${families})`;
+      }).join("; ");
+      return `${n.name} (Categories: ${catsInfo})`;
+    }).join("\n");
+
+    const prompt = `You are "Orbi AI", an expert product arrangement and e-commerce catalog optimizer.
+Analyze this product:
+- Product Title: "${name}"
+- Product Description: "${description || 'No description provided'}"
+
+Here are the store's currently configured Niches, Categories, and Families:
+${formattedNiches || "None configured yet"}
+
+Your goal:
+1. Identify the absolute best Niche, Category, and Family match ONLY from the existing list provided above.
+2. Do NOT suggest new, custom, or made-up Niches, Categories, or Families under any circumstances. You must strictly select the closest available options from the provided list.
+3. Recommend the most appropriate Arrangement Tier based on the price point and exclusivity:
+   - "standard": Budget-friendly, basic or standard essential products.
+   - "premium": High-quality, artistic, or premium Tier products.
+   - "luxury": Extremely premium, royal or luxury high-end offerings.
+   - "all": General/Not applicable.
+4. Recommend the most appropriate Visual Vibe style:
+   - "romance": Pink/Red roses, intimate/passionate items, love-themed or crimson items.
+   - "serenity": Calm white, soft pastels, relaxing pink, peace-themed or serenity products.
+   - "sunshine": Yellow/orange, warm energy, bright golden sunshine items.
+   - "mystery": Indigo/purple/orchid, enchanting, mystery or unique creative packages.
+   - "nature": Green, herbal, eco-friendly, fresh plants/nature theme.
+   - "all": General/Not applicable.
+5. Recommend the Packaging/Presentation Style:
+   - "box": Premium Box / Boxi Maalum.
+   - "wrap": Classic Wrap / Karatasi & Kanga.
+   - "glass": Glass Vase / Chombo cha Kioo.
+   - "basket": Rustic Basket / Kikapu.
+   - "all": None or generic packaging.
+6. Write a brief professional explanation of your choice in both Swahili (Kiswahili) and English so the administrator knows why this is recommended.
+
+Respond with ONLY a raw, complete JSON object. Absolutely no markdown formatting, no \`\`\`json blocks, and no extra text wrapping. The JSON schema must be exactly:
+{
+  "suggestedNiche": "The name of the Niche",
+  "suggestedCategory": "The name of the Category",
+  "suggestedFamily": "The name of the Family/Sub-subcategory",
+  "suggestedTier": "standard" | "premium" | "luxury" | "all",
+  "suggestedVibe": "romance" | "serenity" | "sunshine" | "mystery" | "nature" | "all",
+  "suggestedPresentation": "box" | "wrap" | "glass" | "basket" | "all",
+  "reasonSwahili": "Maelezo mafupi kwanini umechagua kundi na mpangilio huu",
+  "reasonEnglish": "A concise explanation of why you selected this classification and arrangement structure"
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const resultText = response.text || "{}";
+    let parsedResult;
+    try {
+      const match = resultText.match(/\{[\s\S]*\}/);
+      parsedResult = JSON.parse(match ? match[0] : resultText);
+    } catch {
+      // In case copy still has markdown wrappers despite prompt constraints
+      const cleanJson = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
+      try {
+        const match2 = cleanJson.match(/\{[\s\S]*\}/);
+        parsedResult = JSON.parse(match2 ? match2[0] : cleanJson);
+      } catch (e) {
+         parsedResult = {};
+      }
+    }
+
+    res.json({ success: true, ...parsedResult });
+  } catch (error: any) {
+    console.error("POST /api/v1/products/ai-suggest-niche error:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+export default router;
