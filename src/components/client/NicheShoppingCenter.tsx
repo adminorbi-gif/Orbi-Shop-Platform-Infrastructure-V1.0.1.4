@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowLeft, SlidersHorizontal, X, MessageSquare, ChevronRight, Sparkles } from "lucide-react";
-import { Niche, Category, Product } from "../../types";
+import { Niche, Category, Product, DeliveryZone } from "../../types";
 import { motion, AnimatePresence } from "motion/react";
 import { DynamicPropertyFilter, DynamicFilters } from "./DynamicPropertyFilter";
 import { parseKeyAttributes } from "../../utils/propertyExtractor";
@@ -104,6 +104,7 @@ export const NicheShoppingCenter: React.FC<NicheShoppingCenterProps> = ({
   onSelectBundle,
   currentUserId,
   nicheColorMap,
+  deliveryZones = [],
 }) => {
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);

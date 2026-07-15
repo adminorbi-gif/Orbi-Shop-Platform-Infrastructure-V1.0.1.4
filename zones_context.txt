@@ -1,0 +1,161 @@
+  reviews?: Review[];
+  isLiked?: boolean;
+  onLikeToggle?: (productId: string, niche?: string) => void;
+  averageNichePrice?: number;
+}
+
+const ProductCard: React.FC<ProductCardProps> = ({
+  p,
+  seller,
+  onAdd,
+  onSelect,
+  onInteract,
+  onViewSeller,
+  lang = "sw",
+  reviews = [],
+  isLiked = false,
+  onLikeToggle,
+  averageNichePrice,
+}) => {
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(
+    DEFAULT_DELIVERY_ZONES,
+  );
+  const [deliveryRules, setDeliveryRules] = useState<DeliveryRule[]>(
+    DEFAULT_DELIVERY_RULES,
+  );
+  const isOutOfStock = p.stock <= 0;
+  const [imgIdx, setImgIdx] = useState(0);
+  const [showFullImage, setShowFullImage] = useState(false);
+  const lastVibeRef = useRef<number>(0);
+  const triggerHaptic = () => {
+    const now = Date.now();
+    if (now - lastVibeRef.current < 250) return;
+    lastVibeRef.current = now;
+    if (typeof window !== "undefined" && window.navigator && typeof window.navigator.vibrate === "function") {
+      try {
+        window.navigator.vibrate(15);
+      } catch (e) {}
+    }
+  };
+  const displayName = lang === "sw" ? p.nameSw || p.name : p.name;
+  const hasDiscount = Boolean(p.oldPrice && p.oldPrice > p.price);
+  const discountPercent = hasDiscount
+    ? Math.round(((p.oldPrice! - p.price) / p.oldPrice!) * 100)
+    : 0;
+  const isSignificantlyLower = useMemo(() => {
+    if (!averageNichePrice || averageNichePrice <= 0) return false;
+    // Lower by 15% or more than the sales-weighted average price for similar items in the niche
+    return p.price <= averageNichePrice * 0.85;
+  }, [p.price, averageNichePrice]);
+  const isLowStock = p.stock > 0 && p.stock <= 5;
+  const hasActivePro = Boolean(
+    seller?.isPro && seller?.proUntil && seller.proUntil > Date.now(),
+  );
+  const isPushed = p.tags?.some((t) => {
+    const tl = t.toLowerCase();
+    return (
+      tl.includes("promoted") ||
+      tl.includes("promo") ||
+      tl.includes("trend") ||
+      tl.includes("recommend") ||
+      tl.includes("sponsored")
+    );
+  });
+  const isSponsored = hasActivePro || isPushed;
+  
+  const sellerName = seller?.storeName || seller?.name;
+  const registrationTypeLabel = p.sellerRegistrationType;
+  const sellerLocation =
+    seller?.location || (lang === "sw" ? "Tanzania" : "Tanzania");
+  const motionSeed = useMemo(
+    () => productMotionSeed(String(p.id || p.legacy_id || p.name)),
+    [p.id, p.legacy_id, p.name],
+  );
+  const deliveryMotionStyle = useMemo(
+    () =>
+      ({
+        "--orbi-delivery-slide-delay": `-${((motionSeed % 4500) / 1000).toFixed(2)}s`,
+        "--orbi-delivery-truck-delay": `-${(((motionSeed * 7) % 4800) / 1000).toFixed(2)}s`,
+      }) as React.CSSProperties,
+    [motionSeed],
+  );
+
+  const deliverySlides = useMemo(() => {
+    const currentLang: Lang = lang === "en" ? "en" : "sw";
+    if (p.stock <= 0)
+      return [
+        currentLang === "sw" ? "Haipatikani sasa" : "Currently unavailable",
+      ];
+
+    const zones = normalizeDeliveryZones(deliveryZones);
+    const rules = normalizeDeliveryRules(deliveryRules);
+    const productForQuote = {
+      ...p,
+      sellerOriginZoneId:
+        p.sellerOriginZoneId ||
+        inferDeliveryZoneIdFromLocation(sellerLocation, zones),
+    };
+    const quotes = zones.map((zone) => ({
+      zone,
+      quote: quoteProductDelivery(productForQuote, 1, zone, rules, currentLang),
+    }));
+    const availableQuotes = quotes.filter(({ quote }) => quote.available);
+    const firstUnavailable = quotes.find(({ quote }) => !quote.available);
+
+    if (availableQuotes.length === 0) {
+      const reason = firstUnavailable?.quote.reason;
+      return [
+        p.requiresDeliveryQuote
+          ? currentLang === "sw"
+            ? "Makadirio maalum ya delivery"
+            : "Custom delivery quote"
+          : reason ||
+            (currentLang === "sw"
+              ? "Delivery haijapatikana"
+              : "Delivery unavailable"),
+      ];
+    }
+
+    const primary = availableQuotes[0];
+    const primaryEta = parseEtaDays(primary.quote.eta);
+    const primaryDate = primaryEta
+      ? formatDeliveryDateRange(primaryEta.min, primaryEta.max, currentLang)
+      : primary.quote.eta;
+    const primaryZone = getDeliveryZoneName(primary.zone, currentLang);
+    const slides = [
+      `${primaryZone}: ${primaryDate}`,
+      `${currentLang === "sw" ? "Delivery" : "Delivery"} ${formatCurrency(primary.quote.fee)}`,
+    ];
+
+    if (sellerLocation && sellerLocation !== "Tanzania") {
+      slides.push(
+        currentLang === "sw"
+          ? `Kutoka ${sellerLocation}`
+          : `Ships from ${sellerLocation}`,
+      );
+    }
+
+    availableQuotes.slice(1, 3).forEach(({ zone, quote }) => {
+      const eta = parseEtaDays(quote.eta);
+      slides.push(
+        `${getDeliveryZoneName(zone, currentLang)}: ${eta ? formatDeliveryDateRange(eta.min, eta.max, currentLang) : quote.eta}`,
+      );
+    });
+
+    return slides.slice(0, 4);
+  }, [deliveryRules, deliveryZones, lang, p, sellerLocation]);
+
+  useEffect(() => {
+    let active = true;
+    getCachedDeliveryZones().then((zones) => {
+      if (active) setDeliveryZones(zones);
+    });
+    getCachedDeliveryRules().then((rules) => {
+      if (active) setDeliveryRules(rules);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const avgRating = useMemo(() => {

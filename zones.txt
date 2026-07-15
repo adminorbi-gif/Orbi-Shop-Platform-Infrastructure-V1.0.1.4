@@ -1,0 +1,18 @@
+62:} from "../../lib/deliveryZones";
+345:let deliveryZonesCache: DeliveryZone[] | null = null;
+346:let deliveryZonesPromise: Promise<DeliveryZone[]> | null = null;
+351:  if (deliveryZonesCache) return deliveryZonesCache;
+352:  if (!deliveryZonesPromise) {
+353:    deliveryZonesPromise = db
+356:        deliveryZonesCache = normalizeDeliveryZones(zones);
+357:        return deliveryZonesCache;
+360:        deliveryZonesCache = DEFAULT_DELIVERY_ZONES;
+361:        return deliveryZonesCache;
+364:        deliveryZonesPromise = null;
+367:  return deliveryZonesPromise;
+978:  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(DEFAULT_DELIVERY_ZONES);
+990:  const normalizedDeliveryZones = useMemo(() => normalizeDeliveryZones(deliveryZones), [deliveryZones]);
+2935:                    deliveryZones={normalizedDeliveryZones}
+5789:  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(
+5859:    const zones = normalizeDeliveryZones(deliveryZones);
+5915:  }, [deliveryRules, deliveryZones, lang, p, sellerLocation]);
