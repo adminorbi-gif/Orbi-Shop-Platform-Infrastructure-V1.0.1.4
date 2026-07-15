@@ -186,34 +186,30 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
   // Filter out Zote/All from niches if it exists
   const displayNiches = niches.filter(n => n.name !== "Zote" && n.name !== "All");
 
-    const [isPaused, setIsPaused] = useState(false);
-  const [manualOffset, setManualOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
-  const [offsetOnDragStart, setOffsetOnDragStart] = useState(0);
+    const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
-  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDragging(true);
-    setIsPaused(true);
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    setDragStartX(clientX);
-    setOffsetOnDragStart(manualOffset);
+  useEffect(() => {
+    if (isPaused) return;
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 10) {
+          scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+        }
+      }
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const scrollLeftBtn = () => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
   };
-
-  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDragging) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const diff = clientX - dragStartX;
-    setManualOffset(offsetOnDragStart + diff);
+  const scrollRightBtn = () => {
+    if (scrollRef.current) scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
   };
-
-  const handleDragEnd = () => {
-    setIsDragging(false);
-    setIsPaused(false);
-  };
-
-  const scrollLeft = () => setManualOffset(prev => prev + 340);
-  const scrollRight = () => setManualOffset(prev => prev - 340);
 
   
 
@@ -258,22 +254,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       ? Object.values(nicheColorMap).map(v => v.css).join("\n")
       : dynamicStyles.map(s => s.css).join("\n");
     
-    const marqueeAnimationCss = `
-      @keyframes marqueeNiches {
-        0% {
-          transform: translate3d(0, 0, 0);
-        }
-        100% {
-          transform: translate3d(-16.66667%, 0, 0);
-        }
-      }
-      .animate-marquee-niches {
-        display: flex;
-        width: max-content;
-        animation: marqueeNiches 90s linear infinite;
-        gap: 20px;
-      }
-    `;
+    const marqueeAnimationCss = ``;
     return originalStyles + "\n" + marqueeAnimationCss;
   }, [nicheColorMap, dynamicStyles]);
 
@@ -321,7 +302,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
         {/* Manual Navigation Controls */}
         <div className="hidden sm:flex items-center gap-2 shrink-0">
           <button
-            onClick={scrollLeft}
+            onClick={scrollLeftBtn}
             className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-xs cursor-pointer"
             aria-label="Previous"
             id="niche-slide-prev-btn"
@@ -329,7 +310,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
             <ChevronLeft size={18} />
           </button>
           <button
-            onClick={scrollRight}
+            onClick={scrollRightBtn}
             className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-xs cursor-pointer"
             aria-label="Next"
             id="niche-slide-next-btn"
@@ -340,45 +321,32 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       </div>
  
       <div 
-        className="relative overflow-hidden w-full py-2 select-none cursor-grab active:cursor-grabbing"
+        ref={scrollRef}
+        className="flex gap-4 sm:gap-5 overflow-x-auto pb-6 pt-2 px-4 sm:px-6 -mx-4 sm:-mx-6 snap-x snap-mandatory touch-pan-x scroll-smooth"
         onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={(e) => { setIsPaused(false); handleDragEnd(); }}
-        onTouchStart={handleDragStart}
-        onTouchMove={handleDragMove}
-        onTouchEnd={handleDragEnd}
-        onMouseDown={handleDragStart}
-        onMouseMove={handleDragMove}
-        onMouseUp={handleDragEnd}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         id="niche-slider-container"
       >
-        <motion.div
-          animate={{ x: manualOffset }}
-          transition={{ type: "spring", stiffness: 80, damping: 15 }}
-          className="w-full block"
-        >
-          <div 
-             className="animate-marquee-niches"
-            style={{ 
-               animationPlayState: isPaused ? 'paused' : 'running'
-            }}
-          >
-            {repeatedNiches.map((niche, index) => {
+        <style>{`
+          #niche-slider-container::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+            {displayNiches.map((niche, index) => {
               const IconComponent = (LucideIcons as any)[niche.icon] || LucideIcons.ShoppingBag;
               const styleInfo = getStyleClasses(niche.name);
 
               return (
                 <div 
                   key={`${niche.id || niche.name}-${index}`}
-                  className="shrink-0 select-none w-[280px] sm:w-[320px]" style={{ transform: "translate3d(0, 0, 0)" }}
+                  className="shrink-0 snap-start select-none w-[280px] sm:w-[320px]"
                 >
                   <motion.a
                     href={`/niche/${slugifyNiche(niche.name)}`}
                     onClick={(e) => {
-                      if (isDragging) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return;
-                      }
                       e.preventDefault();
                       onSelectNiche(niche.name);
                     }}
@@ -415,8 +383,6 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
                 </div>
               );
             })}
-          </div>
-        </motion.div>
       </div>
     </div>
   );
