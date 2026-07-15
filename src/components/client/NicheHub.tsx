@@ -322,7 +322,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
  
       <div 
         ref={scrollRef}
-        className="flex gap-4 sm:gap-5 overflow-x-auto pb-6 pt-2 px-4 sm:px-6 -mx-4 sm:-mx-6 snap-x snap-mandatory touch-pan-x scroll-smooth"
+        className="flex gap-4 sm:gap-5 overflow-x-auto pb-6 pt-2 px-4 sm:px-6 -mx-4 sm:-mx-6 snap-x snap-mandatory scroll-smooth"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
         onTouchStart={() => setIsPaused(true)}
