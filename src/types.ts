@@ -40,6 +40,8 @@ export interface DeliveryZone {
   isActive: boolean;
   sortOrder?: number;
   sellerId?: string | null;
+  isB2bHub?: boolean;
+  b2bHubName?: string;
 }
 
 export interface DeliveryRule {

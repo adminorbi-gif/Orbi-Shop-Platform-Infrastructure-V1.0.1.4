@@ -51,6 +51,7 @@ const getNicheBgImage = (nicheName: string) => {
 };
 
 interface NicheShoppingCenterProps {
+  deliveryZones?: DeliveryZone[];
   nicheObj: Niche;
   allCategories: Category[];
   products: Product[];
@@ -302,8 +303,8 @@ export const NicheShoppingCenter: React.FC<NicheShoppingCenterProps> = ({
   }
 
   const smartBundles = React.useMemo(() => {
-    return generateSmartBundles(products, lang, nicheObj.name, selectedFamily, currentUserId);
-  }, [products, lang, nicheObj.name, selectedFamily, currentUserId]);
+    return generateSmartBundles(products, lang, nicheObj.name, selectedFamily, currentUserId, deliveryZones);
+  }, [products, lang, nicheObj.name, selectedFamily, currentUserId, deliveryZones]);
 
   const getThemeByNiche = (nicheName: string) => {
     switch (nicheName) {

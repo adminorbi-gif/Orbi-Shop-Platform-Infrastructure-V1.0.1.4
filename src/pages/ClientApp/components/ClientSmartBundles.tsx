@@ -18,6 +18,7 @@ import { PriceDisplay } from '../../../components/PriceDisplay';
 import { motion, AnimatePresence } from 'motion/react';
 import { getProductPriceForQty } from '../../../utils/pricing';
 import { ImageWithSkeleton } from '../../../components/ImageWithSkeleton';
+import { DeliveryZone } from '../../../types';
 
 const MouseTrackZoom: React.FC<{
   children: React.ReactNode;
@@ -158,7 +159,8 @@ export function generateSmartBundles(
   lang: 'sw' | 'en' = 'en',
   selectedNiche?: string,
   selectedFamily?: string,
-  userId?: string
+  userId?: string,
+  deliveryZones: DeliveryZone[] = []
 ): SmartBundle[] {
   if (!products || products.length === 0) return [];
 
@@ -242,8 +244,21 @@ export function generateSmartBundles(
       hashVal = seedId.charCodeAt(i) + ((hashVal << 5) - hashVal);
     }
     hashVal = Math.abs(hashVal);
-    const cities = ["Dar es Salaam", "Arusha", "Mwanza", "Mbeya", "Dodoma"];
-    const hubs = ["Kariakoo Wholesalers", "Sheikh Amri Plaza", "Nyamagana Central Hub", "Sido Commercial Hub", "Uhuru Street Hub"];
+    let cities = ["Dar es Salaam", "Arusha", "Mwanza", "Mbeya", "Dodoma"];
+    let hubs = ["Kariakoo Wholesalers", "Sheikh Amri Plaza", "Nyamagana Central Hub", "Sido Commercial Hub", "Uhuru Street Hub"];
+    
+    if (deliveryZones && deliveryZones.length > 0) {
+      const b2bHubs = deliveryZones.filter(dz => dz.isB2bHub);
+      if (b2bHubs.length > 0) {
+        cities = b2bHubs.map(dz => lang === 'sw' ? (dz.labelSw || dz.name) : (dz.labelEn || dz.name));
+        hubs = b2bHubs.map(dz => dz.b2bHubName || `${lang === 'sw' ? (dz.labelSw || dz.name) : (dz.labelEn || dz.name)} Hub`);
+      } else {
+        // Fallback to all zones if no specific B2B hubs configured
+        cities = deliveryZones.map(dz => lang === 'sw' ? (dz.labelSw || dz.name) : (dz.labelEn || dz.name));
+        hubs = cities.map(city => `${city} Hub`);
+      }
+    }
+
     businessCity = cities[hashVal % cities.length];
     hubName = hubs[hashVal % hubs.length];
     estResellerMargin = 12 + (hashVal % 11); // Deterministic margin target: 12% to 22%

@@ -10877,6 +10877,8 @@ export function SettingsAdmin() {
         name: (zone.name || zone.labelSw || zone.labelEn || "").trim(),
         labelSw: (zone.labelSw || zone.name || "").trim(),
         labelEn: (zone.labelEn || zone.name || "").trim(),
+        isB2bHub: !!zone.isB2bHub,
+        b2bHubName: (zone.b2bHubName || "").trim(),
         price: Math.max(0, Number(zone.price || 0)),
         minDays: Math.max(0, Number(zone.minDays || 0)),
         maxDays: Math.max(Math.max(0, Number(zone.minDays || 0)), Number(zone.maxDays || zone.minDays || 0)),
@@ -12000,6 +12002,40 @@ export function SettingsAdmin() {
                           placeholder="Other regions"
                         />
                       </div>
+                      <div className="lg:col-span-2 flex flex-col justify-end pb-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!zone.isB2bHub}
+                            onChange={(e) => {
+                              const copy = [...deliveryZones];
+                              copy[idx] = { ...copy[idx], isB2bHub: e.target.checked };
+                              setDeliveryZones(copy);
+                            }}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-600"
+                          />
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+                            {isSw ? "Hiki ni Kituo cha B2B?" : "Is B2B Hub?"}
+                          </span>
+                        </label>
+                      </div>
+                      {zone.isB2bHub && (
+                        <div className="lg:col-span-2">
+                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                            {isSw ? "Jina la Hub" : "Hub Name"}
+                          </label>
+                          <input
+                            value={zone.b2bHubName || ""}
+                            onChange={(e) => {
+                              const copy = [...deliveryZones];
+                              copy[idx] = { ...copy[idx], b2bHubName: e.target.value };
+                              setDeliveryZones(copy);
+                            }}
+                            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600"
+                            placeholder={isSw ? "Mfano: Kariakoo Hub" : "e.g. Kariakoo Hub"}
+                          />
+                        </div>
+                      )}
                       <div className="lg:col-span-2">
                         <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">
                           {isSw ? "Gharama (TSh)" : "Fee (TZS)"}

@@ -975,6 +975,20 @@ export default function ClientApp() {
     }
   }, [visualSearchError, showAlert]);
 
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(DEFAULT_DELIVERY_ZONES);
+
+  useEffect(() => {
+    let active = true;
+    getCachedDeliveryZones().then((zones) => {
+      if (active) setDeliveryZones(zones);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const normalizedDeliveryZones = useMemo(() => normalizeDeliveryZones(deliveryZones), [deliveryZones]);
+
   const averageNichePrices = useMemo(() => {
     const nicheTotals: Record<string, { sumPriceSales: number; totalSales: number }> = {};
     products.forEach((p) => {
@@ -1313,17 +1327,17 @@ export default function ClientApp() {
 
   const familyBundles = useMemo(() => {
     if (!selectedFamily) return [];
-    return generateSmartBundles(products, lang, undefined, selectedFamily, activeUser?.id);
-  }, [products, lang, selectedFamily, activeUser?.id]);
+    return generateSmartBundles(products, lang, undefined, selectedFamily, activeUser?.id, normalizedDeliveryZones);
+  }, [products, lang, selectedFamily, activeUser?.id, normalizedDeliveryZones]);
 
   const homeB2BBundles = useMemo(() => {
-    const allBundles = generateSmartBundles(products, lang, undefined, undefined, activeUser?.id);
+    const allBundles = generateSmartBundles(products, lang, undefined, undefined, activeUser?.id, normalizedDeliveryZones);
     return allBundles.filter(b => b.type === 'B2B');
-  }, [products, lang, activeUser?.id]);
+  }, [products, lang, activeUser?.id, normalizedDeliveryZones]);
 
   const allAvailableBundlesForDetail = useMemo(() => {
-    return generateSmartBundles(products, lang, selectedNiche !== "Zote" ? selectedNiche : undefined, selectedFamily || undefined, activeUser?.id);
-  }, [products, lang, selectedNiche, selectedFamily, activeUser?.id]);
+    return generateSmartBundles(products, lang, selectedNiche !== "Zote" ? selectedNiche : undefined, selectedFamily || undefined, activeUser?.id, normalizedDeliveryZones);
+  }, [products, lang, selectedNiche, selectedFamily, activeUser?.id, normalizedDeliveryZones]);
 
   if (ecosystemViewerItem) {
     return (
@@ -2918,6 +2932,7 @@ export default function ClientApp() {
                   (!committedSearch || committedSearch.trim() === "") &&
                   !viewSeller ? (
                   <NicheShoppingCenter
+                    deliveryZones={normalizedDeliveryZones}
                     onOpenAIChat={(customMsg) => {
                       setShowAIChatDrawer(true);
                       if (customMsg) {
