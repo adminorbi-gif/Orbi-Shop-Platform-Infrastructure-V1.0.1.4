@@ -318,6 +318,8 @@ import ScratchCardChallenge from "../../components/ScratchCardChallenge";
 import CookieConsent from "../../components/CookieConsent";
 import { LoadingOverlay } from "../../components/LoadingOverlay";
 import { motion, AnimatePresence } from "motion/react";
+import * as LucideIcons from 'lucide-react';
+import { LayoutGrid } from 'lucide-react';
 import {
   PromoImageSlider,
   PromoCarousel,
@@ -1135,6 +1137,8 @@ export default function ClientApp() {
   const [familySortOrder, setFamilySortOrder] = useState("default");
   const [activeDynamicFilters, setActiveDynamicFilters] =
     useState<DynamicFilters>({});
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const familyProducts = useMemo(() => {
@@ -4977,6 +4981,128 @@ export default function ClientApp() {
             </div>
           </div>
         )}
+
+        
+        {/* Global Categories Side Button */}
+        <div className="fixed top-1/2 -translate-y-1/2 right-0 z-[90]">
+           <button 
+             onClick={() => setShowAllCategories(true)}
+             className="flex items-center justify-center bg-black/5 backdrop-blur-sm text-slate-800 hover:bg-black/10 hover:text-slate-900 w-[25px] h-[50px] rounded-l-[15px] border-none transition-all active:scale-95"
+             title={lang === "sw" ? "Kategoria Zote" : "All Categories"}
+           >
+             <ChevronLeft size={29} strokeWidth={2.5} />
+           </button>
+        </div>
+
+        {/* Global Categories Modal */}
+        <AnimatePresence>
+          {showAllCategories && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed inset-0 z-[150] bg-slate-50 flex flex-col"
+            >
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-4 sm:p-6 bg-white border-b border-slate-200 shadow-sm shrink-0 sticky top-0 z-10 gap-4">
+                 <div className="flex items-center gap-4 w-full md:w-auto">
+                   <button onClick={() => setShowAllCategories(false)} className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
+                     <X size={20} />
+                   </button>
+                   <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight whitespace-nowrap">{lang === "sw" ? "Duka Zote & Kategoria" : "All Stores & Categories"}</h2>
+                 </div>
+                 <div className="w-full md:w-80 relative shrink-0">
+                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                     <Search size={18} className="text-slate-400" />
+                   </div>
+                   <input
+                     type="text"
+                     value={categorySearchQuery}
+                     onChange={(e) => setCategorySearchQuery(e.target.value)}
+                     placeholder={lang === "sw" ? "Tafuta kategoria..." : "Search categories..."}
+                     className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none"
+                   />
+                 </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/50">
+                 <div className="max-w-7xl mx-auto space-y-10 pb-24">
+                    {niches.filter(n => n.name !== "Zote" && n.name !== "All").map(niche => {
+                        const filteredCategories = niche.categories.filter(cat => 
+                           cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase())
+                        );
+                        if (categorySearchQuery && filteredCategories.length === 0) return null;
+                        const IconComponent = (LucideIcons as any)[niche.icon] || LucideIcons.ShoppingBag;
+                        return (
+                           <div key={niche.name} className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100/80">
+                                   <div className="flex items-center gap-4">
+                                       <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
+                                           <IconComponent size={28} />
+                                       </div>
+                                       <div>
+                                          <h3 className="text-2xl font-black text-slate-900 tracking-tight">{niche.name}</h3>
+                                          <p className="text-sm text-slate-500 font-medium mt-1">{niche.categories.length} {lang === "sw" ? "kategoria" : "categories"}</p>
+                                       </div>
+                                   </div>
+                                   <button 
+                                      onClick={() => {
+                                         setShowAllCategories(false);
+                                         setSelectedNiche(niche.name);
+                                         setSelectedCategory("Zote");
+                                         setSelectedFamily(null);
+                                         setSearch("");
+                                         window.scrollTo({ top: 0, behavior: "smooth" });
+                                      }}
+                                      className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors text-center"
+                                   >
+                                      {lang === "sw" ? "Fungua Duka Hili" : "Visit Store"}
+                                   </button>
+                               </div>
+                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+                                  {filteredCategories.map(cat => {
+                                      const catImage = cat.image;
+                                      return (
+                                     <button 
+                                       key={cat.name} 
+                                       className="bg-transparent hover:bg-slate-50/80 rounded-3xl hover:shadow-sm transition-all group flex flex-col justify-start items-center text-center p-3 border border-transparent hover:border-slate-100"
+                                       onClick={() => {
+                                          setShowAllCategories(false);
+                                          setSelectedNiche(niche.name);
+                                          setSelectedCategory(cat.name);
+                                          setSelectedFamily(null);
+                                          setSearch("");
+                                          window.scrollTo({ top: 0, behavior: "smooth" });
+                                       }}
+                                     >
+                                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-100 mb-3 relative overflow-hidden shrink-0 shadow-sm border border-slate-200 flex items-center justify-center">
+                                           {catImage ? (
+                                              <img 
+                                                src={catImage} 
+                                                alt={cat.name} 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                                referrerPolicy="no-referrer"
+                                                onError={(e) => {
+                                                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1560393464-5c69a73c5770?auto=format&fit=crop&q=80";
+                                                }}
+                                              />
+                                           ) : (
+                                              <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-400 font-bold text-lg uppercase">
+                                                 {cat.name.slice(0, 3)}
+                                              </div>
+                                           )}
+                                        </div>
+                                        <span className="text-sm font-bold text-slate-800 block px-2 group-hover:text-blue-600 transition-colors line-clamp-2">{cat.name}</span>
+                                     </button>
+                                  )})}
+                               </div>
+                           </div>
+                        )
+                    })}
+                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Floating Support Chat (Internal) */}
         <div className="fixed bottom-6 right-6 z-55 flex items-center justify-center w-[41px] h-[40px]">

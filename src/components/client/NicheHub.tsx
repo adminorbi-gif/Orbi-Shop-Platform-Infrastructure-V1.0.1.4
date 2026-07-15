@@ -187,11 +187,12 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
   const displayNiches = niches.filter(n => n.name !== "Zote" && n.name !== "All");
 
     const scrollRef = useRef<HTMLDivElement>(null);
-  const [isPaused, setIsPaused] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const isPausedRef = useRef(false);
 
   useEffect(() => {
-    if (isPaused) return;
     const interval = setInterval(() => {
+      if (isPausedRef.current) return;
       if (scrollRef.current) {
         const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
         if (scrollLeft + clientWidth >= scrollWidth - 10) {
@@ -202,7 +203,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, []);
 
   const scrollLeftBtn = () => {
     if (scrollRef.current) scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
@@ -289,9 +290,9 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-800 mb-1.5 tracking-tight">
-            {lang === "sw" ? "Ungependa Kununua nini Leo Kutoka Kwetu?" : "What would you like to buy from us today?"}
-          </h2>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight mb-1.5">
+              {lang === "sw" ? "Ungependa Kununua nini Leo Kutoka Kwetu?" : "What would you like to buy from us today?"}
+            </h2>
           <p className="text-slate-500 font-medium text-xs sm:text-sm">
             {lang === "sw" 
               ? "Chagua duka lako maalum kulingana na uhitaji wako wa sasa." 
@@ -323,10 +324,10 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       <div 
         ref={scrollRef}
         className="flex gap-4 sm:gap-5 overflow-x-auto pb-6 pt-2 px-4 sm:px-6 -mx-4 sm:-mx-6 snap-x snap-mandatory scroll-smooth"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-        onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => setIsPaused(false)}
+        onMouseEnter={() => isPausedRef.current = true}
+        onMouseLeave={() => isPausedRef.current = false}
+        onTouchStart={() => isPausedRef.current = true}
+        onTouchEnd={() => isPausedRef.current = false}
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         id="niche-slider-container"
       >
@@ -383,6 +384,9 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
                 </div>
               );
             })}
+
+      
+
       </div>
     </div>
   );
