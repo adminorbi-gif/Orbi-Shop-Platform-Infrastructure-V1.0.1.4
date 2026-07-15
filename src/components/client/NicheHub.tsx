@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Niche, Product } from '../../types';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
@@ -186,8 +186,36 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
   // Filter out Zote/All from niches if it exists
   const displayNiches = niches.filter(n => n.name !== "Zote" && n.name !== "All");
 
-  const [isPaused, setIsPaused] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
   const [manualOffset, setManualOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [offsetOnDragStart, setOffsetOnDragStart] = useState(0);
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    setIsPaused(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    setDragStartX(clientX);
+    setOffsetOnDragStart(manualOffset);
+  };
+
+  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDragging) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const diff = clientX - dragStartX;
+    setManualOffset(offsetOnDragStart + diff);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setIsPaused(false);
+  };
+
+  const scrollLeft = () => setManualOffset(prev => prev + 340);
+  const scrollRight = () => setManualOffset(prev => prev - 340);
+
+  
 
   // Fallback dynamic styles in case nicheColorMap is not provided
   const dynamicStyles = useMemo(() => {
@@ -223,16 +251,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
     });
   }, [displayNiches]);
 
-  const REPEAT_FACTOR = 6;
-
-  const repeatedNiches = useMemo(() => {
-    if (displayNiches.length === 0) return [];
-    const arr = [];
-    for (let i = 0; i < REPEAT_FACTOR; i++) {
-      arr.push(...displayNiches);
-    }
-    return arr;
-  }, [displayNiches]);
+  
 
   const combinedStylesCss = useMemo(() => {
     const originalStyles = nicheColorMap
@@ -258,6 +277,16 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
     return originalStyles + "\n" + marqueeAnimationCss;
   }, [nicheColorMap, dynamicStyles]);
 
+  const REPEAT_FACTOR = 6;
+  const repeatedNiches = useMemo(() => {
+    if (displayNiches.length === 0) return [];
+    const arr = [];
+    for (let i = 0; i < REPEAT_FACTOR; i++) {
+      arr.push(...displayNiches);
+    }
+    return arr;
+  }, [displayNiches]);
+  
   const styleMapping = useMemo(() => {
     const map: Record<string, { textClass: string; bgClass: string; borderClass: string; hue: number }> = {};
     dynamicStyles.forEach(s => {
@@ -292,7 +321,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
         {/* Manual Navigation Controls */}
         <div className="hidden sm:flex items-center gap-2 shrink-0">
           <button
-            onClick={() => setManualOffset(prev => prev + 340)}
+            onClick={scrollLeft}
             className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-xs cursor-pointer"
             aria-label="Previous"
             id="niche-slide-prev-btn"
@@ -300,7 +329,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
             <ChevronLeft size={18} />
           </button>
           <button
-            onClick={() => setManualOffset(prev => prev - 340)}
+            onClick={scrollRight}
             className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-xs cursor-pointer"
             aria-label="Next"
             id="niche-slide-next-btn"
@@ -313,21 +342,24 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
       <div 
         className="relative overflow-hidden w-full py-2 select-none cursor-grab active:cursor-grabbing"
         onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-        onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => setIsPaused(false)}
+        onMouseLeave={(e) => { setIsPaused(false); handleDragEnd(); }}
+        onTouchStart={handleDragStart}
+        onTouchMove={handleDragMove}
+        onTouchEnd={handleDragEnd}
+        onMouseDown={handleDragStart}
+        onMouseMove={handleDragMove}
+        onMouseUp={handleDragEnd}
         id="niche-slider-container"
       >
-
         <motion.div
           animate={{ x: manualOffset }}
           transition={{ type: "spring", stiffness: 80, damping: 15 }}
           className="w-full block"
         >
           <div 
-            className="animate-marquee-niches"
+             className="animate-marquee-niches"
             style={{ 
-              animationPlayState: isPaused ? 'paused' : 'running'
+               animationPlayState: isPaused ? 'paused' : 'running'
             }}
           >
             {repeatedNiches.map((niche, index) => {
@@ -336,12 +368,17 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
 
               return (
                 <div 
-                  key={`${niche.id || niche.name}-marquee-${index}`}
-                  className="shrink-0 select-none w-[280px] sm:w-[320px]"
+                  key={`${niche.id || niche.name}-${index}`}
+                  className="shrink-0 select-none w-[280px] sm:w-[320px]" style={{ transform: "translate3d(0, 0, 0)" }}
                 >
                   <motion.a
                     href={`/niche/${slugifyNiche(niche.name)}`}
                     onClick={(e) => {
+                      if (isDragging) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                      }
                       e.preventDefault();
                       onSelectNiche(niche.name);
                     }}
