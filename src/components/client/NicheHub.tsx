@@ -200,7 +200,7 @@ export function NicheHub({ niches, products, lang, onSelectNiche, onSelectBundle
           scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
         }
       }
-    }, 3500);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isPaused]);
 
