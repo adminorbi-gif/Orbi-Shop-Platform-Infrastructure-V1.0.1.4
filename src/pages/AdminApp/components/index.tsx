@@ -12131,7 +12131,8 @@ export function SettingsAdmin() {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const newIdx = deliveryRules.length;
                       setDeliveryRules((prev) => [
                         ...prev,
                         {
@@ -12150,8 +12151,9 @@ export function SettingsAdmin() {
                           isAvailable: true,
                           sortOrder: prev.length + 1,
                         },
-                      ])
-                    }
+                      ]);
+                      setEditingDeliveryRuleIndex(newIdx);
+                    }}
                     className="min-h-11 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-blue-700"
                   >
                     + {isSw ? "Ongeza Rule" : "Add Rule"}
@@ -12344,17 +12346,23 @@ export function SettingsAdmin() {
                       {isSw ? "Hakuna pricing rules bado. Zone price itatumika kama fallback." : "No pricing rules yet. Zone fees will be used as fallback."}
                     </div>
                   )}
-                  {deliveryRules.map((rule, idx) => (
-                    <div
-                      id={`delivery-rule-editor-${idx}`}
-                      key={rule.id || idx}
-                      className={`rounded-3xl border p-4 transition-all ${
-                        editingDeliveryRuleIndex === idx
-                          ? "border-blue-400 bg-blue-50/70 shadow-lg shadow-blue-100"
-                          : "border-blue-100 bg-white"
-                      }`}
-                    >
-                      {editingDeliveryRuleIndex === idx && (
+
+                  {editingDeliveryRuleIndex === null && deliveryRules.length > 0 && (
+                    <div className="rounded-2xl border border-dashed border-blue-200/60 bg-blue-50/20 p-5 text-center text-xs font-medium text-slate-500 animate-in fade-in duration-300">
+                      {isSw
+                        ? "Bofya kitufe cha 'Hariri' kwenye jedwali la Matrix hapo juu ili kurekebisha bei na maelezo ya kanuni hiyo."
+                        : "Click 'Edit' on any rule in the Matrix table above to modify its pricing and details."}
+                    </div>
+                  )}
+
+                  {deliveryRules.map((rule, idx) => {
+                    if (editingDeliveryRuleIndex !== idx) return null;
+                    return (
+                      <div
+                        id={`delivery-rule-editor-${idx}`}
+                        key={rule.id || idx}
+                        className="rounded-3xl border border-blue-400 bg-blue-50/70 shadow-lg shadow-blue-100 p-4 transition-all animate-in zoom-in-95 duration-200"
+                      >
                         <div className="mb-3 flex items-center justify-between rounded-2xl bg-white px-3 py-2 ring-1 ring-blue-100">
                           <span className="text-[10px] font-black uppercase tracking-wider text-blue-700">
                             {isSw ? "Unahariri rule hii kutoka fallback matrix" : "Editing this fallback matrix rule"}
@@ -12367,117 +12375,125 @@ export function SettingsAdmin() {
                             {isSw ? "Funga" : "Close"}
                           </button>
                         </div>
-                      )}
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
-                        <div className="lg:col-span-2">
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Eneo" : "Zone"}</label>
-                          <select
-                            value={rule.zoneId || ""}
-                            onChange={(e) => {
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                          <div className="lg:col-span-2">
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Eneo" : "Zone"}</label>
+                            <select
+                              value={rule.zoneId || ""}
+                              onChange={(e) => {
+                                const copy = [...deliveryRules];
+                                copy[idx] = { ...copy[idx], zoneId: e.target.value };
+                                setDeliveryRules(copy);
+                              }}
+                              className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600"
+                            >
+                              <option value="">{isSw ? "Chagua zone" : "Select zone"}</option>
+                              {deliveryZones.map((zone) => (
+                                <option key={zone.id} value={zone.id}>{zone.labelSw || zone.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Aina" : "Class"}</label>
+                            <select
+                              value={rule.deliveryClass || "standard"}
+                              onChange={(e) => {
+                                const copy = [...deliveryRules];
+                                copy[idx] = { ...copy[idx], deliveryClass: e.target.value };
+                                setDeliveryRules(copy);
+                              }}
+                              className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600"
+                            >
+                              <option value="standard">{isSw ? "Kawaida" : "Standard"}</option>
+                              <option value="fresh_food">{isSw ? "Chakula fresh" : "Fresh food"}</option>
+                              <option value="processed_food">{isSw ? "Chakula kilichosindikwa" : "Processed food"}</option>
+                              <option value="bulky">{isSw ? "Kubwa" : "Bulky"}</option>
+                              <option value="heavy">{isSw ? "Nzito" : "Heavy"}</option>
+                              <option value="vehicle">{isSw ? "Gari / Chombo" : "Vehicle"}</option>
+                              <option value="special">{isSw ? "Maalum" : "Special"}</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kg Chini" : "Min Kg"}</label>
+                            <input type="number" min="0" step="0.1" value={rule.minWeightKg || 0} onChange={(e) => {
                               const copy = [...deliveryRules];
-                              copy[idx] = { ...copy[idx], zoneId: e.target.value };
+                              copy[idx] = { ...copy[idx], minWeightKg: Number(e.target.value || 0) };
                               setDeliveryRules(copy);
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600"
-                          >
-                            <option value="">{isSw ? "Chagua zone" : "Select zone"}</option>
-                            {deliveryZones.map((zone) => (
-                              <option key={zone.id} value={zone.id}>{zone.labelSw || zone.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Aina" : "Class"}</label>
-                          <select
-                            value={rule.deliveryClass || "standard"}
-                            onChange={(e) => {
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kg Juu" : "Max Kg"}</label>
+                            <input type="number" min="0" step="0.1" value={rule.maxWeightKg ?? ""} onChange={(e) => {
                               const copy = [...deliveryRules];
-                              copy[idx] = { ...copy[idx], deliveryClass: e.target.value };
+                              copy[idx] = { ...copy[idx], maxWeightKg: e.target.value === "" ? null : Number(e.target.value || 0) };
                               setDeliveryRules(copy);
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600"
-                          >
-                            <option value="standard">{isSw ? "Kawaida" : "Standard"}</option>
-                            <option value="fresh_food">{isSw ? "Chakula fresh" : "Fresh food"}</option>
-                            <option value="processed_food">{isSw ? "Chakula kilichosindikwa" : "Processed food"}</option>
-                            <option value="bulky">{isSw ? "Kubwa" : "Bulky"}</option>
-                            <option value="heavy">{isSw ? "Nzito" : "Heavy"}</option>
-                            <option value="vehicle">{isSw ? "Gari / Chombo" : "Vehicle"}</option>
-                            <option value="special">{isSw ? "Maalum" : "Special"}</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kg Chini" : "Min Kg"}</label>
-                          <input type="number" min="0" step="0.1" value={rule.minWeightKg || 0} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], minWeightKg: Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kg Juu" : "Max Kg"}</label>
-                          <input type="number" min="0" step="0.1" value={rule.maxWeightKg ?? ""} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], maxWeightKg: e.target.value === "" ? null : Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" placeholder="No cap" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Ada ya Msingi" : "Base Fee"}</label>
-                          <input type="number" min="0" value={rule.baseFee || 0} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], baseFee: Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kwa Kg" : "Per Kg"}</label>
-                          <input type="number" min="0" value={rule.perKgFee || 0} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], perKgFee: Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Siku Chini" : "ETA Min"}</label>
-                          <input type="number" min="0" value={rule.minDays || 0} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], minDays: Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Siku Juu" : "ETA Max"}</label>
-                          <input type="number" min="0" value={rule.maxDays || 0} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], maxDays: Number(e.target.value || 0) };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
-                        </div>
-                        <div className="lg:col-span-2">
-                          <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Sababu ikiwa haipatikani" : "Unavailable reason"}</label>
-                          <input value={rule.reasonIfUnavailable || ""} onChange={(e) => {
-                            const copy = [...deliveryRules];
-                            copy[idx] = { ...copy[idx], reasonIfUnavailable: e.target.value };
-                            setDeliveryRules(copy);
-                          }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" placeholder={isSw ? "Mf. Huduma haipo mkoa huu" : "e.g. Service unavailable"} />
-                        </div>
-                        <div className="flex items-end gap-2 lg:col-span-2">
-                          <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-2 rounded-2xl bg-slate-50 px-3 text-[10px] font-black uppercase tracking-wider text-slate-600 ring-1 ring-slate-200">
-                            <input type="checkbox" checked={rule.isAvailable !== false} onChange={(e) => {
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" placeholder="No cap" />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Ada ya Msingi" : "Base Fee"}</label>
+                            <input type="number" min="0" value={rule.baseFee || 0} onChange={(e) => {
                               const copy = [...deliveryRules];
-                              copy[idx] = { ...copy[idx], isAvailable: e.target.checked };
+                              copy[idx] = { ...copy[idx], baseFee: Number(e.target.value || 0) };
                               setDeliveryRules(copy);
-                            }} className="h-4 w-4 accent-emerald-600" />
-                            {isSw ? "Inapatikana" : "Available"}
-                          </label>
-                          <button type="button" onClick={() => setDeliveryRules((prev) => prev.filter((_, i) => i !== idx))} className="min-h-11 rounded-2xl bg-rose-50 px-3 text-xs font-black text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-100">
-                            {isSw ? "Futa" : "Remove"}
-                          </button>
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Kwa Kg" : "Per Kg"}</label>
+                            <input type="number" min="0" value={rule.perKgFee || 0} onChange={(e) => {
+                              const copy = [...deliveryRules];
+                              copy[idx] = { ...copy[idx], perKgFee: Number(e.target.value || 0) };
+                              setDeliveryRules(copy);
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Siku Chini" : "ETA Min"}</label>
+                            <input type="number" min="0" value={rule.minDays || 0} onChange={(e) => {
+                              const copy = [...deliveryRules];
+                              copy[idx] = { ...copy[idx], minDays: Number(e.target.value || 0) };
+                              setDeliveryRules(copy);
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Siku Juu" : "ETA Max"}</label>
+                            <input type="number" min="0" value={rule.maxDays || 0} onChange={(e) => {
+                              const copy = [...deliveryRules];
+                              copy[idx] = { ...copy[idx], maxDays: Number(e.target.value || 0) };
+                              setDeliveryRules(copy);
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" />
+                          </div>
+                          <div className="lg:col-span-2">
+                            <label className="mb-1 block text-[9px] font-black uppercase tracking-wider text-slate-400">{isSw ? "Sababu ikiwa haipatikani" : "Unavailable reason"}</label>
+                            <input value={rule.reasonIfUnavailable || ""} onChange={(e) => {
+                              const copy = [...deliveryRules];
+                              copy[idx] = { ...copy[idx], reasonIfUnavailable: e.target.value };
+                              setDeliveryRules(copy);
+                            }} className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold outline-none focus:border-blue-600" placeholder={isSw ? "Mf. Huduma haipo mkoa huu" : "e.g. Service unavailable"} />
+                          </div>
+                          <div className="flex items-end gap-2 lg:col-span-2">
+                            <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-2 rounded-2xl bg-slate-50 px-3 text-[10px] font-black uppercase tracking-wider text-slate-600 ring-1 ring-slate-200">
+                              <input type="checkbox" checked={rule.isAvailable !== false} onChange={(e) => {
+                                const copy = [...deliveryRules];
+                                copy[idx] = { ...copy[idx], isAvailable: e.target.checked };
+                                copy[idx] = { ...copy[idx], isAvailable: e.target.checked };
+                                setDeliveryRules(copy);
+                              }} className="h-4 w-4 accent-emerald-600" />
+                              {isSw ? "Inapatikana" : "Available"}
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeliveryRules((prev) => prev.filter((_, i) => i !== idx));
+                                setEditingDeliveryRuleIndex(null);
+                              }}
+                              className="min-h-11 rounded-2xl bg-rose-50 px-3 text-xs font-black text-rose-600 ring-1 ring-rose-100 transition hover:bg-rose-100"
+                            >
+                              {isSw ? "Futa" : "Remove"}
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
