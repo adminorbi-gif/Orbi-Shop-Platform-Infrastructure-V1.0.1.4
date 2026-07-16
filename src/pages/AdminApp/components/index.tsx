@@ -10094,6 +10094,10 @@ export function SettingsAdmin() {
   });
   const [simDistance, setSimDistance] = useState<number>(25);
   const [simWeight, setSimWeight] = useState<number>(3);
+  const [csvInput, setCsvInput] = useState<string>("");
+  const [showCsvImporter, setShowCsvImporter] = useState<boolean>(false);
+  const [csvImportError, setCsvImportError] = useState<string>("");
+  const [csvImportSuccess, setCsvImportSuccess] = useState<string>("");
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTotalPending, setAiTotalPending] = useState(0);
@@ -12120,53 +12124,373 @@ export function SettingsAdmin() {
               </div>
 
               <div className="rounded-[2rem] border border-blue-100 bg-blue-50/60 p-4 sm:p-5">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                      {isSw ? "Kanuni za Bei ya Usafirishaji" : "Delivery Pricing Rules"}
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                      <Sparkles size={14} className="text-blue-600" />
+                      {isSw ? "Kanuni za Bei ya Usafirishaji (Fallback Matrix)" : "Delivery Pricing Rules (Fallback Matrix)"}
                     </h4>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500 max-w-2xl">
                       {isSw
-                        ? "Bei halisi kulingana na eneo, aina ya bidhaa na uzito. Kanuni isiyopatikana inaweza kuzuia bidhaa kufikishwa eneo husika."
-                        : "Real quote rules by zone, product class, and weight. Unavailable rules can block delivery for a zone."}
+                        ? "Weka mfumo mbadala wa bei kulingana na uzito halisi au wa kiasi (Volumetric Weight) kwa kila mkoa kama Google Maps API haitapatikana."
+                        : "Configure fallback prices based on physical or volumetric weight per zone when coordinate-based route calculation is unavailable."}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newIdx = deliveryRules.length;
-                      setDeliveryRules((prev) => [
-                        ...prev,
-                        {
-                          id: `new-rule-${Date.now()}`,
-                          zoneId: deliveryZones[0]?.id || "",
-                          deliveryClass: "standard",
-                          minWeightKg: 0,
-                          maxWeightKg: 5,
-                          baseFee: 0,
-                          perKgFee: 0,
-                          fragileFee: 0,
-                          oversizedFee: 0,
-                          coldChainFee: 0,
-                          minDays: 1,
-                          maxDays: 2,
-                          isAvailable: true,
-                          sortOrder: prev.length + 1,
-                        },
-                      ]);
-                      setEditingDeliveryRuleIndex(newIdx);
-                    }}
-                    className="min-h-11 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-blue-700"
-                  >
-                    + {isSw ? "Ongeza Rule" : "Add Rule"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliveryRules([]);
+                        setEditingDeliveryRuleIndex(null);
+                        setCsvImportSuccess(isSw ? "Kanuni zote zimefutwa! UI sasa ni safi." : "All fallback rules cleared! UI is now pristine.");
+                        setCsvImportError("");
+                      }}
+                      className="min-h-11 rounded-2xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition shadow-xs flex items-center gap-1.5"
+                    >
+                      <Trash size={12} />
+                      {isSw ? "Futa Zote" : "Clear All"}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (deliveryZones.length === 0) {
+                          alert(isSw ? "Tafadhali ongeza angalau Zone moja kwanza!" : "Please add at least one Zone first!");
+                          return;
+                        }
+
+                        const generated: any[] = [];
+                        deliveryZones.forEach((zone) => {
+                          // 1. Small items (0 - 5 kg) e.g., Phones, clothes, standard parcel
+                          generated.push({
+                            id: `gen-rule-sm-${zone.id}-${Date.now()}`,
+                            zoneId: String(zone.id),
+                            deliveryClass: "standard",
+                            minWeightKg: 0,
+                            maxWeightKg: 5,
+                            baseFee: 3000,
+                            perKgFee: 200,
+                            minDays: 1,
+                            maxDays: 2,
+                            isAvailable: true,
+                            sortOrder: generated.length + 1,
+                          });
+
+                          // 2. Medium electronics / TV (5 - 25 kg)
+                          generated.push({
+                            id: `gen-rule-md-${zone.id}-${Date.now()}`,
+                            zoneId: String(zone.id),
+                            deliveryClass: "standard",
+                            minWeightKg: 5,
+                            maxWeightKg: 25,
+                            baseFee: 15000,
+                            perKgFee: 1000,
+                            minDays: 1,
+                            maxDays: 2,
+                            isAvailable: true,
+                            sortOrder: generated.length + 2,
+                          });
+
+                          // 3. Bulky Appliances / Fridge (25 - 100 kg)
+                          generated.push({
+                            id: `gen-rule-lg-${zone.id}-${Date.now()}`,
+                            zoneId: String(zone.id),
+                            deliveryClass: "bulky",
+                            minWeightKg: 25,
+                            maxWeightKg: 100,
+                            baseFee: 35000,
+                            perKgFee: 1200,
+                            minDays: 2,
+                            maxDays: 3,
+                            isAvailable: true,
+                            sortOrder: generated.length + 3,
+                          });
+                        });
+
+                        setDeliveryRules(generated);
+                        setCsvImportSuccess(
+                          isSw
+                            ? `Ufanisi! Kanuni ${generated.length} za kiuhalisia (kg/volumetric) zimezalishwa kwa Mafanikio!`
+                            : `Success! ${generated.length} realistic pricing rules (kg/volumetric) auto-generated successfully!`
+                        );
+                        setCsvImportError("");
+                      }}
+                      className="min-h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-xs font-black uppercase tracking-wider shadow-md transition flex items-center gap-1.5"
+                    >
+                      <Sparkles size={12} className="animate-bounce" />
+                      {isSw ? "Zalisha Fallback Rules" : "Generate Fallback Rules"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCsvImporter(!showCsvImporter);
+                        setCsvImportError("");
+                        setCsvImportSuccess("");
+                      }}
+                      className={`min-h-11 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
+                        showCsvImporter 
+                          ? "bg-slate-800 border-slate-700 text-white" 
+                          : "bg-white border-blue-200 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <FileText size={12} />
+                      {isSw ? "Pakia CSV Table" : "Import CSV Table"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newIdx = deliveryRules.length;
+                        setDeliveryRules((prev) => [
+                          ...prev,
+                          {
+                            id: `new-rule-${Date.now()}`,
+                            zoneId: deliveryZones[0]?.id || "",
+                            deliveryClass: "standard",
+                            minWeightKg: 0,
+                            maxWeightKg: 5,
+                            baseFee: 0,
+                            perKgFee: 0,
+                            fragileFee: 0,
+                            oversizedFee: 0,
+                            coldChainFee: 0,
+                            minDays: 1,
+                            maxDays: 2,
+                            isAvailable: true,
+                            sortOrder: prev.length + 1,
+                          },
+                        ]);
+                        setEditingDeliveryRuleIndex(newIdx);
+                      }}
+                      className="min-h-11 rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white shadow-sm transition hover:bg-blue-700 flex items-center gap-1"
+                    >
+                      <Plus size={12} />
+                      {isSw ? "Ongeza Rule" : "Add Rule"}
+                    </button>
+                  </div>
                 </div>
+
+                {/* FORMULA & PREFILLED SAMPLE DATA PANEL */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="rounded-2xl border border-blue-100 bg-white p-4 text-left">
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-slate-800">
+                      <Tv size={14} className="text-blue-600" />
+                      <span>{isSw ? "Ukokotoaji wa Flat-Screen TV (Mifano)" : "Flat-Screen TV Calculation (Samples)"}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      {isSw 
+                        ? "Televisheni kubwa ya nchi 55 inachukua nafasi kubwa (Volumetric weight). Mfumo unatumia fomula ya ujazo: (Length × Width × Height) / 5000."
+                        : "Large 55-inch TVs consume space (Volumetric weight). The system utilizes the cubic formula: (Length × Width × Height) / 5000."}
+                    </p>
+                    <div className="mt-2 bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-[10px]">
+                      <div className="flex justify-between font-bold">
+                        <span className="text-slate-500">{isSw ? "Vipimo vya TV:" : "TV Dimensions:"}</span>
+                        <span className="text-slate-800">120cm × 75cm × 15cm</span>
+                      </div>
+                      <div className="flex justify-between font-bold">
+                        <span className="text-slate-500">{isSw ? "Uzito wa Volumetric:" : "Volumetric Weight:"}</span>
+                        <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">27.0 Kg</span>
+                      </div>
+                      <div className="border-t border-dashed border-slate-200/80 my-1 pt-1 flex justify-between font-black text-slate-900">
+                        <span>{isSw ? "Bei Inayopendekezwa:" : "Target Rate Recommendation:"}</span>
+                        <span>TZS 42,000</span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-semibold italic">
+                        {isSw ? "Njia: TZS 15,000 (Base) + (27 Kg × TZS 1,000 per Kg) = TZS 42,000" : "Formula: TZS 15,000 (Base) + (27 Kg × TZS 1,000 per Kg) = TZS 42,000"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-100 bg-white p-4 text-left">
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black uppercase tracking-widest text-slate-800">
+                      <Refrigerator size={14} className="text-emerald-600" />
+                      <span>{isSw ? "Ukokotoaji wa Refrigerator / Fridge" : "Refrigerator / Fridge Calculation"}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      {isSw 
+                        ? "Friji kubwa huchukua nafasi kubwa ya ubebaji. Mfumo unatumia kiwango cha Bulky ili kulinda faida na kuruhusu msafirishaji mbadala wa mizigo mikubwa."
+                        : "Refrigerators occupy substantial transport space. The system applies Bulky class rates to ensure viable shipping payouts."}
+                    </p>
+                    <div className="mt-2 bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-1.5 text-[10px]">
+                      <div className="flex justify-between font-bold">
+                        <span className="text-slate-500">{isSw ? "Uzito Halisi/Uzito Kiasi:" : "Physical/Cubic Weight:"}</span>
+                        <span className="text-slate-800">60 Kg</span>
+                      </div>
+                      <div className="flex justify-between font-bold">
+                        <span className="text-slate-500">{isSw ? "Daraja la Usafirishaji:" : "Shipping Category:"}</span>
+                        <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-black uppercase">Bulky</span>
+                      </div>
+                      <div className="border-t border-dashed border-slate-200/80 my-1 pt-1 flex justify-between font-black text-slate-900">
+                        <span>{isSw ? "Bei Inayopendekezwa:" : "Target Rate Recommendation:"}</span>
+                        <span>TZS 107,000</span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-semibold italic">
+                        {isSw ? "Njia: TZS 35,000 (Base) + (60 Kg × TZS 1,200 per Kg) = TZS 107,000" : "Formula: TZS 35,000 (Base) + (60 Kg × TZS 1,200 per Kg) = TZS 107,000"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CSV SPREADSHEET IMPORTER */}
+                {showCsvImporter && (
+                  <div className="rounded-2xl border border-slate-300 bg-slate-900 text-white p-4 text-left mb-4 space-y-3 transition-all">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                        {isSw ? "Pakia Jedwali la CSV la Bei" : "Import Fallback Rules CSV/Excel"}
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowCsvImporter(false)}
+                        className="text-slate-400 hover:text-white font-bold text-xs"
+                      >
+                        {isSw ? "Funga" : "Close"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-300 leading-normal">
+                      {isSw 
+                        ? "Bandika mistari ya CSV au nakili kutoka Excel. Mfumo utatambua majina ya mikoa automatically (mf. Dar es Salaam)."
+                        : "Paste CSV lines or copy rows directly from your Excel sheet. The system will auto-map regional names instantly."}
+                    </p>
+
+                    <div className="bg-slate-800 rounded-xl p-3 text-[9px] text-slate-400 font-mono">
+                      <p className="text-emerald-400 font-black mb-1">{isSw ? "MFANO WA JEDWALI (COPYABLE FORMAT):" : "COPYABLE TEMPLATE FORMAT:"}</p>
+                      <p>Zone,Class,MinWeight,MaxWeight,BaseFee,PerKgFee,MinDays,MaxDays</p>
+                      <p>Dar es Salaam,standard,0,5,3000,200,1,2</p>
+                      <p>Dar es Salaam,standard,5,25,15000,1000,1,2</p>
+                      <p>Dar es Salaam,bulky,25,100,35000,1200,2,3</p>
+                      <p>Arusha,standard,0,5,5000,400,2,3</p>
+                    </div>
+
+                    <textarea
+                      value={csvInput}
+                      onChange={(e) => setCsvInput(e.target.value)}
+                      placeholder="Paste your CSV here..."
+                      className="w-full h-32 bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-white outline-none focus:border-emerald-500"
+                    />
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] text-slate-400">
+                        {isSw ? "Kigezo: Zone,Class,MinWeight,MaxWeight,BaseFee,PerKgFee,MinDays,MaxDays" : "Template: Zone,Class,MinWeight,MaxWeight,BaseFee,PerKgFee,MinDays,MaxDays"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCsvImportError("");
+                          setCsvImportSuccess("");
+                          if (!csvInput.trim()) {
+                            setCsvImportError(isSw ? "Tafadhali ingiza maandishi ya CSV kwanza." : "Please enter some CSV text first.");
+                            return;
+                          }
+                          
+                          const lines = csvInput.split("\n");
+                          const parsedRules: DeliveryRule[] = [];
+                          let successCount = 0;
+                          let skipCount = 0;
+
+                          for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (!line) continue;
+                            
+                            // Skip headers
+                            if (
+                              line.toLowerCase().startsWith("zone") ||
+                              line.toLowerCase().startsWith("eneo") ||
+                              line.toLowerCase().startsWith("class") ||
+                              line.toLowerCase().includes("minweight")
+                            ) {
+                              continue;
+                            }
+
+                            const parts = line.split(/[,;\t]/); // Support comma, semicolon, tab
+                            if (parts.length < 6) {
+                              skipCount++;
+                              continue;
+                            }
+
+                            const zoneNameInput = parts[0]?.trim();
+                            const deliveryClass = parts[1]?.trim() || "standard";
+                            const minWeightKg = Number(parts[2]?.trim() || 0);
+                            const maxWeightKgInput = parts[3]?.trim();
+                            const maxWeightKg = (!maxWeightKgInput || maxWeightKgInput.toLowerCase() === "null" || maxWeightKgInput === "∞" || maxWeightKgInput === "") ? null : Number(maxWeightKgInput);
+                            const baseFee = Number(parts[4]?.trim() || 0);
+                            const perKgFee = Number(parts[5]?.trim() || 0);
+                            const minDays = Number(parts[6]?.trim() || 1);
+                            const maxDays = Number(parts[7]?.trim() || 2);
+
+                            // Find zone by name or labelSw
+                            const zone = deliveryZones.find(
+                              (z) =>
+                                z.name?.toLowerCase().trim() === zoneNameInput.toLowerCase() ||
+                                z.labelSw?.toLowerCase().trim() === zoneNameInput.toLowerCase() ||
+                                String(z.id) === zoneNameInput
+                            );
+
+                            if (!zone) {
+                              skipCount++;
+                              continue;
+                            }
+
+                            parsedRules.push({
+                              id: `imported-rule-${Date.now()}-${i}`,
+                              zoneId: String(zone.id),
+                              deliveryClass,
+                              minWeightKg,
+                              maxWeightKg,
+                              baseFee,
+                              perKgFee,
+                              minDays,
+                              maxDays,
+                              isAvailable: true,
+                              sortOrder: parsedRules.length + 1,
+                            });
+                            successCount++;
+                          }
+
+                          if (parsedRules.length === 0) {
+                            setCsvImportError(
+                              isSw
+                                ? `Hakuna mistari iliyofanikiwa kuingizwa. (Hakikisha majina ya mikoa yanafanana na Zones zako, Mirukwa: ${skipCount} mistari)`
+                                : `No rows were successfully imported. (Ensure zone names match your Zones, Skipped: ${skipCount} rows)`
+                            );
+                            return;
+                          }
+
+                          setDeliveryRules((prev) => [...prev, ...parsedRules]);
+                          setCsvImportSuccess(
+                            isSw
+                              ? `Ufanisi! Kanuni ${successCount} zimeongezwa kwenye Matrix. (Rukwa: ${skipCount})`
+                              : `Success! ${successCount} rules added to the live matrix. (Skipped: ${skipCount})`
+                          );
+                          setCsvInput("");
+                        }}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition"
+                      >
+                        {isSw ? "Orodhesha Bei Zote" : "Apply Imported Rules"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* FEEDBACK STATUS ALERTS */}
+                {csvImportSuccess && (
+                  <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-[10px] text-emerald-800 font-bold text-left mb-4 flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-600" />
+                    <span>{csvImportSuccess}</span>
+                  </div>
+                )}
+                {csvImportError && (
+                  <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3 text-[10px] text-rose-800 font-bold text-left mb-4 flex items-center gap-2">
+                    <AlertCircle size={14} className="text-rose-600" />
+                    <span>{csvImportError}</span>
+                  </div>
+                )}
 
                 <div className="rounded-[1.5rem] border border-blue-100 bg-white/80 p-3 sm:p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                     <div>
                       <h5 className="text-[11px] font-black uppercase tracking-widest text-slate-900">
-                        {isSw ? "Live Fallback Pricing Matrix" : "Live Fallback Pricing Matrix"}
+                        {isSw ? "Fallback Pricing Matrix inayotumika sasa" : "Live Active Fallback Pricing Matrix"}
                       </h5>
                       <p className="text-[10px] font-semibold text-slate-500">
                         {isSw
@@ -12186,7 +12510,8 @@ export function SettingsAdmin() {
                           <th className="px-3 py-2">{isSw ? "Eneo" : "Zone"}</th>
                           <th className="px-3 py-2">{isSw ? "Class" : "Class"}</th>
                           <th className="px-3 py-2">{isSw ? "Uzito" : "Weight"}</th>
-                          <th className="px-3 py-2">{isSw ? "Bei" : "Pricing"}</th>
+                          <th className="px-3 py-2">{isSw ? "Bei ya Msingi" : "Base Fee"}</th>
+                          <th className="px-3 py-2">{isSw ? "Bei ya Ziada kwa Kg" : "Per Kg Fee"}</th>
                           <th className="px-3 py-2">ETA</th>
                           <th className="px-3 py-2">{isSw ? "Hali" : "Status"}</th>
                           <th className="px-3 py-2">{isSw ? "Kitendo" : "Action"}</th>
@@ -12195,8 +12520,8 @@ export function SettingsAdmin() {
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {deliveryMatrixRows.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-3 py-5 text-center text-xs font-semibold text-slate-400">
-                              {isSw ? "Hakuna matrix rules bado." : "No matrix rules configured yet."}
+                            <td colSpan={8} className="px-3 py-5 text-center text-xs font-semibold text-slate-400">
+                              {isSw ? "Hakuna matrix rules bado. UI iko safi bila fallback mzee!" : "No matrix rules configured yet. UI is clean without fallback!"}
                             </td>
                           </tr>
                         ) : (
@@ -12213,8 +12538,11 @@ export function SettingsAdmin() {
                               <td className="px-3 py-2 font-semibold text-slate-600">
                                 {Number(rule.minWeightKg || 0)}kg - {rule.maxWeightKg ?? "∞"}kg
                               </td>
+                              <td className="px-3 py-2 font-black text-slate-800">
+                                {formatCurrency(rule.baseFee || 0)}
+                              </td>
                               <td className="px-3 py-2 font-semibold text-slate-600">
-                                {formatCurrency(rule.baseFee || 0)} + {formatCurrency(rule.perKgFee || 0)}/kg
+                                + {formatCurrency(rule.perKgFee || 0)}/kg
                               </td>
                               <td className="px-3 py-2 font-semibold text-slate-600">
                                 {rule.minDays === rule.maxDays
