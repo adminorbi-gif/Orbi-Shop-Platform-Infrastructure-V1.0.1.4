@@ -144,7 +144,9 @@ export function CheckoutView({
       .then((quote) => {
         if (active) {
           setDeliveryQuote(quote);
-          if (!selectedShippingOptionId && quote?.shippingPlan?.recommended) {
+          const options = quote?.shippingPlan?.shippingOptions || [];
+          const isSelectedValid = options.some((opt: any) => opt.id === selectedShippingOptionId);
+          if ((!selectedShippingOptionId || !isSelectedValid) && quote?.shippingPlan?.recommended) {
             setSelectedShippingOptionId(quote.shippingPlan.recommended.id);
           }
         }
@@ -180,8 +182,8 @@ export function CheckoutView({
       if (!hasLiveDeliveryQuote) {
         throw new Error(
           lang === "sw"
-            ? "Chagua eneo halisi kupitia Google Maps ili mfumo ukokotoe delivery route na gharama sahihi."
-            : "Select an exact Google Maps location so the system can calculate the delivery route and fee.",
+            ? "Chagua eneo halisi kupitia Google Maps au andika anwani yako ili mfumo ukokotoe route sahihi."
+            : "Select an exact Google Maps location or enter your address so the system can calculate the live route.",
         );
       }
       await handlePlaceOrder({
@@ -234,19 +236,19 @@ export function CheckoutView({
             </button>
 
             {/* Left: Summary (Mobile: Bottom, Desktop: Left) */}
-            <div className="w-full md:w-[350px] bg-slate-50 p-8 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight mb-6 flex items-center gap-2">
+            <div className="w-full md:w-[350px] bg-slate-50 p-6 md:p-8 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col justify-between">
+              <div className="space-y-6">
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
                   <Package size={18} className="text-primary" />
                   {lang === "sw" ? "Muhtasari wa Oda" : "Order Summary"}
                 </h3>
                 
-                <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 no-scrollbar">
+                <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-1 no-scrollbar">
                   {cart.map((item, i) => {
                     const price = getProductPriceForQty(item.product, item.quantity);
                     return (
-                      <div key={i} className="flex gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">
+                      <div key={i} className="flex gap-3 items-center">
+                        <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">
                           <ImageWithSkeleton
                             src={item.product.images?.[0]}
                             alt=""
@@ -256,9 +258,9 @@ export function CheckoutView({
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate">{item.product.name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">{item.quantity} x {formatCurrency(price)}</p>
+                          <p className="text-[10px] text-slate-400 font-bold">{item.quantity} x {formatCurrency(price)}</p>
                         </div>
-                        <div className="text-xs font-black text-slate-700">
+                        <div className="text-xs font-black text-slate-700 shrink-0">
                           {formatCurrency(price * item.quantity)}
                         </div>
                       </div>
@@ -267,114 +269,53 @@ export function CheckoutView({
                 </div>
 
                 {hasWholesaleItems && (
-                  <div className="mt-4 p-4.5 bg-amber-50/90 border-l-4 border-amber-500 rounded-r-2xl shadow-xs space-y-2 text-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Lock size={15} className="text-amber-600 shrink-0" />
-                      <p className="text-xs font-black uppercase tracking-wider text-amber-800">
-                        {lang === "sw" ? "Bidhaa za Jumla Zimefungwa" : "Wholesale Items Locked"}
+                  <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-xl space-y-1 text-slate-800 animate-in zoom-in-95">
+                    <div className="flex items-center gap-1.5">
+                      <Lock size={13} className="text-amber-600 shrink-0" />
+                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">
+                        {lang === "sw" ? "Bidhaa za Jumla Zimefungwa" : "Wholesale Locked"}
                       </p>
                     </div>
-                    <p className="text-[11px] font-medium leading-relaxed text-slate-600">
+                    <p className="text-[10px] font-medium leading-relaxed text-slate-600">
                       {lang === "sw"
-                        ? "Marekebisho au kufuta bidhaa za jumla kumefungwa wakati wa malipo. Bidhaa hizi zimewekewa viwango vya MOQ (Idadi ya Chini) na haziwezi kushindana na bei au idadi za reja-reja (retail sales)."
-                        : "Wholesale products in this order are locked at wholesale bulk quantity and cannot be modified or deleted during checkout. Because wholesale items are sold at highly discounted bulk rates, they require minimum order quantities and cannot compete with retail pricing."}
+                        ? "Marekebisho yamefungwa kwa bei ya jumla na MOQ."
+                        : "Locked at wholesale rate and minimum order quantity."}
                     </p>
                   </div>
                 )}
 
-                <div className="mt-8 space-y-4">
-                  <div className="relative group">
+                <div className="space-y-3">
+                  <div className="relative">
                     <input
                       type="text"
                       value={details.couponCode}
                       onChange={(e) => setDetails({ ...details, couponCode: e.target.value })}
                       placeholder={lang === "sw" ? "Nambari ya Punguzo" : "Promo Code"}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-16 py-2.5 text-xs font-bold focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
                     />
                     <button 
                       onClick={validateCoupon}
-                      className="absolute right-2 top-2 bottom-2 px-3 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-primary transition-colors"
+                      className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-primary transition-colors"
                     >
                       Apply
                     </button>
                   </div>
 
                   {appliedCoupon && (
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center justify-between animate-in zoom-in-95">
-                      <div className="flex items-center gap-2 text-emerald-700">
-                        <Tag size={14} className="animate-bounce" />
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 flex items-center justify-between animate-in zoom-in-95">
+                      <div className="flex items-center gap-1.5 text-emerald-700">
+                        <Tag size={13} className="animate-bounce" />
                         <span className="text-xs font-black">{appliedCoupon.code}</span>
                       </div>
                       <button onClick={() => setAppliedCoupon(null)} className="text-emerald-400 hover:text-emerald-600 transition-colors">
-                        <X size={14} />
+                        <X size={13} />
                       </button>
                     </div>
                   )}
-
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {lang === "sw" ? "Eneo la Usafirishaji" : "Delivery zone"}
-                    </label>
-                    <select
-                      value={selectedDeliveryZoneId}
-                      onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
-                    >
-                      {normalizeDeliveryZones(deliveryZones).map((zone) => (
-                        <option key={zone.id} value={zone.id}>
-                          {getDeliveryZoneName(zone, lang)} · {formatDeliveryDays(zone, lang)} · {formatCurrency(zone.price)}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-2 text-[10px] font-bold text-slate-500">
-                      {deliveryQuoteLoading
-                        ? (lang === "sw" ? "Inahesabu usafirishaji..." : "Calculating delivery...")
-                        : hasLiveDeliveryQuote
-                          ? `${deliveryQuote?.selectedShippingType?.label || deliveryQuote?.zoneName || getDeliveryZoneName(selectedDeliveryZone, lang)} · ${deliveryQuote?.eta || ""} · ${formatCurrency(deliveryFee)}`
-                          : (lang === "sw" ? "Delivery ya sasa inahitaji eneo halisi la Google Maps." : "Current delivery pricing requires an exact Google Maps location.")}
-                    </p>
-                    {deliveryQuote?.shippingPlan?.shippingOptions && deliveryQuote.shippingPlan.shippingOptions.length > 0 ? (
-                      <div className="mt-4 space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          {lang === "sw" ? "Aina ya Usafirishaji" : "Shipping Method"}
-                        </label>
-                        <div className="grid grid-cols-1 gap-2">
-                          {deliveryQuote.shippingPlan.shippingOptions.map((opt: any) => (
-                            <button
-                              key={opt.id}
-                              type="button"
-                              onClick={() => setSelectedShippingOptionId(opt.id)}
-                              className={`flex items-center justify-between rounded-xl border p-3 text-left transition-colors ${selectedShippingOptionId === opt.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-200 bg-white hover:border-primary/30"}`}
-                            >
-                              <div>
-                                <p className="text-xs font-bold text-slate-800">{opt.label}</p>
-                                {opt.eta && <p className="text-[10px] text-slate-500">{opt.eta}</p>}
-                              </div>
-                              {opt.fee !== undefined ? (
-                                <p className="text-sm font-black text-primary">{formatCurrency(opt.fee)}</p>
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    
-                    {deliveryQuote?.shippingPlan?.message ? (
-                      <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-[11px] font-bold text-blue-800">
-                        {deliveryQuote.shippingPlan.message}
-                      </div>
-                    ) : null}
-                    {deliveryQuote?.unavailableItems?.length ? (
-                      <div className="mt-2 rounded-xl border border-rose-100 bg-rose-50 p-3 text-[11px] font-bold text-rose-700">
-                        {lang === "sw" ? "Hazifiki eneo hili:" : "Unavailable for this zone:"}{" "}
-                        {deliveryQuote.unavailableItems.map((item) => item.name).join(", ")}
-                      </div>
-                    ) : null}
-                  </div>
                 </div>
               </div>
 
-              <div className="mt-8 space-y-3 pt-6 border-t border-slate-200/50">
+              <div className="space-y-3 pt-6 border-t border-slate-200/50 mt-6">
                 <div className="flex justify-between text-xs font-bold text-slate-400">
                   <span>Subtotal</span>
                   <span className="text-slate-600">{formatCurrency(subtotal)}</span>
@@ -387,43 +328,67 @@ export function CheckoutView({
                 )}
                 <div className="flex justify-between text-xs font-bold text-slate-400">
                   <span>Delivery</span>
-                  <span className="text-slate-600">{deliveryQuoteLoading ? "..." : formatCurrency(deliveryFee)}</span>
+                  <span className="text-slate-600">
+                    {deliveryQuoteLoading ? (
+                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded animate-pulse">Calculating...</span>
+                    ) : (
+                      formatCurrency(deliveryFee)
+                    )}
+                  </span>
                 </div>
+                {hasLiveDeliveryQuote && deliveryQuote?.eta && (
+                  <div className="flex justify-between text-[10px] font-semibold text-slate-500 -mt-1 bg-slate-100/60 p-1.5 rounded-lg">
+                    <span>ETA:</span>
+                    <span>{deliveryQuote.eta}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-2">
                   <span className="text-sm font-black text-slate-900 uppercase">{lang === "sw" ? "Jumla Kuu" : "Grand Total"}</span>
                   <div className="text-right">
-                    <p className="text-2xl font-black text-primary leading-none">{formatCurrency(total)}</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">Tanzanian Shillings</p>
+                    <p className="text-xl font-black text-primary leading-none">{formatCurrency(total)}</p>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">TZS</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Right: Steps */}
-            <div className="flex-1 p-8 md:p-12">
-              <div className="flex items-center gap-4 mb-8">
-                {[1, 2, 3].map((s) => (
-                  <div key={s} className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= s ? "bg-primary text-white" : "bg-slate-100 text-slate-400"}`}>
-                      {step > s ? <CheckCircle2 size={14} /> : s}
-                    </div>
-                    {s < 3 && <div className={`w-8 sm:w-12 h-1 rounded-full transition-all ${step > s ? "bg-primary" : "bg-slate-100"}`} />}
-                  </div>
-                ))}
+            <div className="flex-1 p-6 md:p-10 flex flex-col justify-between">
+              {/* Step indicator header */}
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                    {lang === "sw" ? `Hatua ${step} kati ya 2` : `Step ${step} of 2`}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {[1, 2].map((s) => (
+                    <div 
+                      key={s} 
+                      className={`h-1.5 rounded-full transition-all duration-300 ${step === s ? "w-8 bg-primary" : "w-3 bg-slate-200"}`} 
+                    />
+                  ))}
+                </div>
               </div>
 
               {step === 1 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-200">
                   <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{lang === "sw" ? "Maelezo ya Usafirishaji" : "Shipping Details"}</h2>
-                    <p className="text-sm text-slate-400 font-medium mt-1">{lang === "sw" ? "Tafadhali jaza mahali bidhaa ipelekwe" : "Where should we deliver your products?"}</p>
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                      {lang === "sw" ? "Maelezo ya Usafirishaji" : "Shipping & Delivery"}
+                    </h2>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      {lang === "sw" ? "Tafadhali jaza jina, simu na eneo kamili" : "Please provide your contact and exact delivery spot."}
+                    </p>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang === "sw" ? "Jina Kamili" : "Full Name"}</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        {lang === "sw" ? "Jina Kamili" : "Full Name"}
+                      </label>
                       <div className="relative">
-                        <UserIcon className={`absolute left-4 top-1/2 -translate-y-1/2 ${touched.name && currentErrors.name ? 'text-red-400' : 'text-slate-400'}`} size={16} />
+                        <UserIcon className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${touched.name && currentErrors.name ? 'text-red-400' : 'text-slate-400'}`} size={15} />
                         <input
                           type="text"
                           name="checkout_name"
@@ -432,17 +397,20 @@ export function CheckoutView({
                           onBlur={() => handleBlur('name')}
                           onChange={(e) => setDetails({ ...details, name: e.target.value })}
                           placeholder="John Doe"
-                          className={`w-full bg-slate-50 border rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold focus:bg-white transition-all outline-none ${touched.name && currentErrors.name ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-100 focus:border-primary focus:ring-4 focus:ring-primary/10'}`}
+                          className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold focus:bg-white transition-all outline-none ${touched.name && currentErrors.name ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-100 focus:border-primary focus:ring-4 focus:ring-primary/10'}`}
                         />
                       </div>
                       {touched.name && currentErrors.name && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 ml-1 flex items-center gap-1"><Info size={12}/> {currentErrors.name}</p>
+                        <p className="text-[10px] text-red-500 font-medium mt-1 ml-1 flex items-center gap-1"><Info size={11}/> {currentErrors.name}</p>
                       )}
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang === "sw" ? "Namba ya Simu" : "Phone Number"}</label>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        {lang === "sw" ? "Namba ya Simu" : "Phone Number"}
+                      </label>
                       <div className="relative">
-                        <Phone className={`absolute left-4 top-1/2 -translate-y-1/2 ${touched.phone && currentErrors.phone ? 'text-red-400' : 'text-slate-400'}`} size={16} />
+                        <Phone className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${touched.phone && currentErrors.phone ? 'text-red-400' : 'text-slate-400'}`} size={15} />
                         <input
                           type="tel"
                           name="checkout_phone"
@@ -451,143 +419,239 @@ export function CheckoutView({
                           onBlur={() => handleBlur('phone')}
                           onChange={(e) => setDetails({ ...details, phone: e.target.value })}
                           placeholder="+255 000 000 000"
-                          className={`w-full bg-slate-50 border rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold focus:bg-white transition-all outline-none ${touched.phone && currentErrors.phone ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-100 focus:border-primary focus:ring-4 focus:ring-primary/10'}`}
+                          className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold focus:bg-white transition-all outline-none ${touched.phone && currentErrors.phone ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-100 focus:border-primary focus:ring-4 focus:ring-primary/10'}`}
                         />
                       </div>
                       {touched.phone && currentErrors.phone && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 ml-1 flex items-center gap-1"><Info size={12}/> {currentErrors.phone}</p>
+                        <p className="text-[10px] text-red-500 font-medium mt-1 ml-1 flex items-center gap-1"><Info size={11}/> {currentErrors.phone}</p>
                       )}
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang === "sw" ? "Anwani ya Makazi/Ofisi" : "Delivery Address"}</label>
-                    <GooglePlacePicker
-                      lang={lang as any}
-                      value={details.address}
-                      selectedPlace={selectedPlace}
-                      onAddressChange={(value) => {
-                        setDetails({ ...details, address: value });
-                        setTouched({ ...touched, address: true });
-                      }}
-                      onPlaceSelect={(place) => setSelectedPlace(place)}
-                      placeholder="e.g. Mwanza, Rock City, Mtaa wa Pamba"
-                      error={touched.address && currentErrors.address ? currentErrors.address : undefined}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Delivery Zone selector right beside address picker */}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        {lang === "sw" ? "Mkoa / Kanda" : "Region / Zone"}
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                        <select
+                          value={selectedDeliveryZoneId}
+                          onChange={(e) => setSelectedDeliveryZoneId(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold focus:bg-white transition-all outline-none text-slate-700 focus:border-primary"
+                        >
+                          {normalizeDeliveryZones(deliveryZones).map((zone) => (
+                            <option key={zone.id} value={zone.id}>
+                              {getDeliveryZoneName(zone, lang)} ({formatDeliveryDays(zone, lang)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        {lang === "sw" ? "Anwani ya Google Maps (Uwasilishaji Halisi)" : "Google Maps Spot (Exact Delivery)"}
+                      </label>
+                      <GooglePlacePicker
+                        lang={lang as any}
+                        value={details.address}
+                        selectedPlace={selectedPlace}
+                        onAddressChange={(value) => {
+                          setDetails({ ...details, address: value });
+                          setTouched({ ...touched, address: true });
+                        }}
+                        onPlaceSelect={(place) => setSelectedPlace(place)}
+                        placeholder={lang === "sw" ? "Tafuta eneo halisi (Kibiti, nk)..." : "Search specific spot (e.g., Kibiti)..."}
+                        error={touched.address && currentErrors.address ? currentErrors.address : undefined}
+                        compact={true}
+                      />
+                    </div>
                   </div>
+
+                  {/* Shipping Options directly in Step 1 below details */}
+                  {deliveryQuote?.shippingPlan?.shippingOptions && deliveryQuote.shippingPlan.shippingOptions.length > 0 && (
+                    <div className="space-y-2 pt-1 border-t border-slate-100">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        {lang === "sw" ? "Chagua Njia ya Usafirishaji" : "Select Shipping Method"}
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {deliveryQuote.shippingPlan.shippingOptions.map((opt: any) => {
+                          const isSelected = selectedShippingOptionId === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => setSelectedShippingOptionId(opt.id)}
+                              className={`flex items-center justify-between rounded-xl border p-2.5 text-left transition-all ${isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
+                                  <Zap size={12} className={isSelected ? "text-primary" : "text-slate-400"} />
+                                  {opt.label}
+                                </p>
+                                {opt.eta && <p className="text-[10px] text-slate-500 mt-0.5">{opt.eta}</p>}
+                              </div>
+                              {opt.fee !== undefined && (
+                                <p className="text-xs font-black text-primary shrink-0 ml-2">{formatCurrency(opt.fee)}</p>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Message / warnings from delivery engine */}
+                  {deliveryQuote?.shippingPlan?.message && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] font-bold text-blue-800 flex gap-2 items-start">
+                      <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                      <span>{deliveryQuote.shippingPlan.message}</span>
+                    </div>
+                  )}
+
+                  {deliveryQuote?.unavailableItems?.length ? (
+                    <div className="rounded-xl border border-rose-100 bg-rose-50 p-2.5 text-[11px] font-bold text-rose-700 flex gap-2 items-start">
+                      <X size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                      <div>
+                        {lang === "sw" ? "Baadhi ya bidhaa hazifiki eneo hili:" : "Some items cannot reach this zone:"}{" "}
+                        {deliveryQuote.unavailableItems.map((item) => item.name).join(", ")}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <button 
                     onClick={() => {
                       setTouched({ name: true, phone: true, address: true });
-                      if (isValid) setStep(2);
+                      if (isValid) {
+                        if (!selectedPlace) {
+                          showAlert(
+                            lang === "sw"
+                              ? "Tafadhali chagua eneo sahihi kutoka kwa mapendekezo ya Google Maps ili kuhakikisha huduma na gharama sahihi."
+                              : "Please select an address from Google Maps suggestions to ensure accurate delivery routing.",
+                            "warning"
+                          );
+                          return;
+                        }
+                        setStep(2);
+                      }
                     }}
                     disabled={(!isValid && (touched.name && touched.phone && touched.address)) || deliveryQuoteLoading || Boolean(deliveryQuote?.unavailableItems?.length)}
-                    className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 hover:bg-primary transition-all active:scale-95 disabled:opacity-50"
+                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-primary transition-all active:scale-98 disabled:opacity-50 mt-4 shadow-sm"
                   >
                     <span>{lang === "sw" ? "Endelea na Malipo" : "Continue to Payment"}</span>
-                    <ArrowRight size={18} />
+                    <ArrowRight size={15} />
                   </button>
                 </div>
               )}
 
               {step === 2 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-200">
                   <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{lang === "sw" ? "Njia ya Malipo" : "Payment Method"}</h2>
-                    <p className="text-sm text-slate-400 font-medium mt-1">{lang === "sw" ? "Chagua jinsi ungependa kulipia oda yako" : "Select how you would like to pay"}</p>
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                      {lang === "sw" ? "Njia ya Malipo & Uhakiki" : "Payment & Final Review"}
+                    </h2>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      {lang === "sw" ? "Chagua malipo na uhakiki taarifa zako" : "Select payment method and verify details before ordering"}
+                    </p>
                   </div>
 
-                  <div className="space-y-3">
-                    <label className={`block w-full p-5 border-2 rounded-2xl transition-all cursor-pointer ${details.paymentMethod === 'escrow' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
+                  {/* Payment option cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className={`block p-4 border-2 rounded-xl transition-all cursor-pointer ${details.paymentMethod === 'escrow' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
                       <input type="radio" className="hidden" checked={details.paymentMethod === 'escrow'} onChange={() => setDetails({ ...details, paymentMethod: 'escrow' })} />
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${details.paymentMethod === 'escrow' ? 'bg-primary text-white' : 'bg-white text-slate-400'}`}>
-                          <ShieldCheck size={24} />
+                      <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${details.paymentMethod === 'escrow' ? 'bg-primary text-white' : 'bg-white text-slate-400'}`}>
+                          <ShieldCheck size={20} />
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="text-sm font-black text-slate-800">Orbi PaySafe Escrow</h4>
-                            <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider">Recommended</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            <h4 className="text-xs font-black text-slate-800">Orbi PaySafe</h4>
+                            <span className="bg-emerald-100 text-emerald-700 text-[8px] font-black px-1 py-0.5 rounded uppercase">Salama</span>
                           </div>
-                          <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tight">Safest way to pay. Funds held until delivery is confirmed.</p>
+                          <p className="text-[9px] text-slate-500 font-bold mt-1 uppercase tracking-tight">
+                            {lang === "sw" ? "Lipa sasa, pesa inashikiliwa mpaka upokee" : "Pay now, funds held until delivery is verified"}
+                          </p>
                         </div>
                       </div>
                     </label>
 
-                    <label className={`block w-full p-5 border-2 rounded-2xl transition-all cursor-pointer ${details.paymentMethod === 'cod' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
+                    <label className={`block p-4 border-2 rounded-xl transition-all cursor-pointer ${details.paymentMethod === 'cod' ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50 hover:border-slate-200'}`}>
                       <input type="radio" className="hidden" checked={details.paymentMethod === 'cod'} onChange={() => setDetails({ ...details, paymentMethod: 'cod' })} />
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${details.paymentMethod === 'cod' ? 'bg-primary text-white' : 'bg-white text-slate-400'}`}>
-                          <CreditCard size={24} />
+                      <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${details.paymentMethod === 'cod' ? 'bg-primary text-white' : 'bg-white text-slate-400'}`}>
+                          <CreditCard size={20} />
                         </div>
-                        <div className="flex-1">
-                          <h4 className="text-sm font-black text-slate-800">Cash on Delivery (Lipa Unapopokea)</h4>
-                          <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tight">Pay the courier directly in cash when you receive the items.</p>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-black text-slate-800">Cash on Delivery</h4>
+                          <p className="text-[9px] text-slate-500 font-bold mt-1 uppercase tracking-tight">
+                            {lang === "sw" ? "Lipa taslimu unapopokea bidhaa zako" : "Pay cash directly to our agent at your doorstep"}
+                          </p>
                         </div>
                       </div>
                     </label>
                   </div>
 
-                  <div className="flex gap-4">
-                    <button onClick={() => setStep(1)} className="px-6 py-4 border border-slate-200 text-slate-400 hover:text-slate-900 rounded-2xl font-black text-sm uppercase tracking-wider transition-all">Back</button>
-                    <button onClick={() => setStep(3)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 hover:bg-primary transition-all active:scale-95">
-                      <span>Review Order</span>
-                      <ArrowRight size={18} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {step === 3 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{lang === "sw" ? "Hakiki & Maliza" : "Review & Finish"}</h2>
-                    <p className="text-sm text-slate-400 font-medium mt-1">{lang === "sw" ? "Hakiki taarifa zako kabla ya kuweka oda" : "Double check everything before placing your order"}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6 bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === "sw" ? "Mteja" : "Customer"}</p>
-                      <p className="text-sm font-bold text-slate-800">{details.name}</p>
-                      <p className="text-xs text-slate-500 font-medium">{details.phone}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === "sw" ? "Mahali" : "Shipping To"}</p>
-                      <p className="text-sm font-bold text-slate-800 truncate">{details.address}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{lang === "sw" ? "Malipo" : "Payment"}</p>
-                      <p className="text-sm font-bold text-slate-800 uppercase">{details.paymentMethod === 'escrow' ? 'Orbi PaySafe' : 'Cash on Delivery'}</p>
+                  {/* Elegant Details Summary Card */}
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200/60 pb-1.5">
+                      {lang === "sw" ? "Uhakiki wa Maelezo" : "Recipient & Route Summary"}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400">{lang === "sw" ? "Mpokeaji" : "Recipient"}</p>
+                        <p className="font-bold text-slate-800">{details.name}</p>
+                        <p className="text-slate-500 font-bold text-[10px]">{details.phone}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400">{lang === "sw" ? "Eneo" : "Destination"}</p>
+                        <p className="font-bold text-slate-800 truncate" title={details.address}>{details.address}</p>
+                        {deliveryQuote?.routeSummary && (
+                          <p className="text-primary font-bold text-[10px]">
+                            {deliveryQuote.routeSummary.maxDistanceKm} km · {deliveryQuote.routeSummary.maxDurationMinutes} mins
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex items-start gap-4">
-                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
-                      <Lock size={20} />
+                  {/* Security banner */}
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex gap-3">
+                    <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg shrink-0 h-fit">
+                      <Lock size={16} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-emerald-800">{lang === "sw" ? "Malipo Salama Yamewashwa" : "Secure Checkout Guaranteed"}</h4>
-                      <p className="text-xs text-emerald-600 font-medium mt-1 leading-relaxed">
+                      <h4 className="text-xs font-bold text-emerald-800">
+                        {lang === "sw" ? "Garantii ya Orbi PaySafe" : "Orbi PaySafe Guarantee Enabled"}
+                      </h4>
+                      <p className="text-[10px] text-emerald-600 font-semibold mt-0.5 leading-normal">
                         {details.paymentMethod === 'escrow' 
-                          ? "Your money is protected by Orbi Shop Escrow. We only pay the seller after you confirm delivery."
-                          : "Pay safely in person. Check your items before handing over the cash."}
+                          ? (lang === "sw" ? "Fedha zako zinalindwa kwa uaminifu wa hali ya juu. Muuzaji atalipwa tu baada ya kupokea bidhaa." : "Your transaction is highly secure. The seller is only paid after you verify receipt.")
+                          : (lang === "sw" ? "Kagua mzigo wako kwa utulivu kabla ya kumpa dereva pesa zako." : "Inspect your package thoroughly before paying the delivery agent.")}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex gap-4">
-                    <button onClick={() => setStep(2)} disabled={isOrdering} className="px-6 py-4 border border-slate-200 text-slate-400 hover:text-slate-900 rounded-2xl font-black text-sm uppercase tracking-wider transition-all disabled:opacity-50">Back</button>
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      onClick={() => setStep(1)} 
+                      disabled={isOrdering} 
+                      className="px-4 py-3 border border-slate-200 text-slate-400 hover:text-slate-900 rounded-xl font-black text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                    >
+                      {lang === "sw" ? "Rudi" : "Back"}
+                    </button>
                     <button 
                       onClick={onSubmit}
                       disabled={isOrdering || deliveryQuoteLoading || Boolean(deliveryQuote?.unavailableItems?.length)}
-                      className="flex-1 bg-primary text-white py-4 rounded-2xl font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 shadow-lg shadow-orange-100 hover:bg-slate-900 transition-all active:scale-95 disabled:opacity-50"
+                      className="flex-1 bg-primary text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-100 hover:bg-slate-900 transition-all active:scale-98 disabled:opacity-50"
                     >
                       {isOrdering ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <>
-                          <span>{lang === "sw" ? "Thibitisha Oda" : "Place Your Order"}</span>
-                          <CheckCircle2 size={18} />
+                          <span>{lang === "sw" ? "Thibitisha Oda" : "Confirm & Place Order"}</span>
+                          <CheckCircle2 size={15} />
                         </>
                       )}
                     </button>

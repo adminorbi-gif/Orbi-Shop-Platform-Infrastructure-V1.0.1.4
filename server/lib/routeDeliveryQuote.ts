@@ -297,7 +297,7 @@ export const quoteCartRouteDelivery = async (
   rules: any[],
   context: RouteContext,
   settingsInput?: Partial<DeliverySettings>,
-  options: { applyInsurance?: boolean } = {},
+  options: { applyInsurance?: boolean; shippingType?: string } = {},
 ) => {
   const lang = context.lang || "sw";
   const settings = mapDeliverySettings(settingsInput || DEFAULT_DELIVERY_SETTINGS);
