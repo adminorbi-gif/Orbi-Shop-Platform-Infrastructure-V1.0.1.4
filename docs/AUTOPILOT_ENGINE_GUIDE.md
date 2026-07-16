@@ -101,7 +101,48 @@ To prevent jarring UI changes where timers reset on every refresh, the duration 
 
 ---
 
-## 5. Guidelines for Future AI Coding Agents
+## 5. Delivery Fallback & Advanced Courier Routing Architecture
+
+To guarantee uninterruptible operations even if Google Maps API coordinates or routing lookups are temporarily blocked or unavailable, the Orbi logistics engine includes a robust **Live Fallback Pricing Matrix** paired with a smart **Courier Routing Engine**.
+
+### 5.1 Dynamic Volumetric Weight Formula
+Shipping costs are calculated using either physical weight or volumetric (cubic) weight—whichever is higher—to prevent shipping oversized, lightweight items (like large televisions or furniture) at loss-making rates.
+* **Volumetric Weight Formula**:
+  $$\text{Volumetric Weight (Kg)} = \frac{\text{Length (cm)} \times \text{Width (cm)} \times \text{Height (cm)}}{5000}$$
+
+### 5.2 Predefined Target Standards & Samples
+* **55-inch Flat-Screen TV**:
+  * Dimensions: $120\text{ cm} \times 75\text{ cm} \times 15\text{ cm}$
+  * Calculated Volumetric Weight: $27.0\text{ Kg}$
+  * Pricing Model: $\text{Base Fee (TZS 15,000)} + (27\text{ Kg} \times \text{TZS 1,000/Kg}) = \text{TZS 42,000}$
+* **Refrigerator / Large Fridge**:
+  * Physical Weight: $60.0\text{ Kg}$
+  * Shipping Category: `bulky`
+  * Pricing Model: $\text{Base Fee (TZS 35,000)} + (60\text{ Kg} \times \text{TZS 1,200/Kg}) = \text{TZS 107,000}$
+
+### 5.3 Deterministic Fallback Matrix Generation
+When the admin clicks **Generate Fallback Rules**, the system auto-populates realistic pricing brackets mapped across all configured regional zones:
+1. **Small Items (0 - 5 Kg)**: Base Fee TZS 3,000, + TZS 200/Kg. (Standard Class)
+2. **Medium Electronics (5 - 25 Kg)**: Base Fee TZS 15,000, + TZS 1,000/Kg. (Standard Class)
+3. **Bulky Appliances (25 - 100+ Kg)**: Base Fee TZS 35,000, + TZS 1,200/Kg. (Bulky Class)
+
+### 5.4 Simple CSV/Excel Bulk Importer
+The administrator can easily upload regional tables by copying and pasting a standard CSV or Excel tabular structure. The system automatically reconciles and matches colloquial and Swahili regional names to active zone databases on-the-fly.
+* **Supported CSV Format**:
+  ```csv
+  Zone,Class,MinWeight,MaxWeight,BaseFee,PerKgFee,MinDays,MaxDays
+  Dar es Salaam,standard,0,5,3000,200,1,2
+  Arusha,standard,5,25,15000,1000,2,3
+  ```
+
+### 5.5 Multi-Option Courier Integration
+The client checkout seamlessly presents two real-time shipping tiers based on speed and cargo requirements:
+1. **Bus Faster Delivery (`fast_bus`)**: Tailored for high-priority parcels sent via intercity passenger buses. Applies a $+50\%$ speed multiplier, premium processing, and delivers significantly faster ETAs.
+2. **Normal Cargo (`normal_cargo`)**: Standard freight transport option optimized for bulk, heavy, or non-urgent consolidated shipping at a highly competitive rate.
+
+---
+
+## 6. Guidelines for Future AI Coding Agents
 
 When tasked with modifying, optimizing, or extending these dynamic systems:
 1. **Never Hardcode Pricing Math**: Always use `getProductSafeBundlePrice` or its equivalent checks to resolve unit costs.
