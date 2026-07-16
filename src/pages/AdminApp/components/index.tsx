@@ -10092,6 +10092,8 @@ export function SettingsAdmin() {
     oversized: false,
     requiresColdChain: false,
   });
+  const [simDistance, setSimDistance] = useState<number>(25);
+  const [simWeight, setSimWeight] = useState<number>(3);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTotalPending, setAiTotalPending] = useState(0);
@@ -12550,6 +12552,203 @@ export function SettingsAdmin() {
                     />
                   </div>
                 </div>
+
+                {/* VISUAL & INTERACTIVE ROUTE ENGINE EXPLAINER */}
+                {(() => {
+                  const simBase = deliverySettings.basePriceTzs ?? 1800;
+                  const simPerKm = deliverySettings.costPerKmTzs ?? 900;
+                  
+                  let calculatedFee = 0;
+                  let simType = "";
+                  let simTypeEn = "";
+                  let formulaExplained = "";
+                  let formulaExplainedEn = "";
+                  let etaExplained = "";
+                  let etaExplainedEn = "";
+
+                  if (simDistance <= 35) {
+                    calculatedFee = Math.round(simBase + (simDistance * simPerKm));
+                    simType = "Usafirishaji wa Mlangoni (Local Doorstep)";
+                    simTypeEn = "Local Doorstep Delivery";
+                    formulaExplained = `${formatCurrency(simBase)} (Ada ya Msingi) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(simBase)} (Base Fee) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
+                    etaExplained = "Ndani ya saa 1 - 3 za kazi";
+                    etaExplainedEn = "Within 1 - 3 business hours";
+                  } else if (simDistance <= 100) {
+                    const localPart = 35 * simPerKm;
+                    const bulkPart = (simDistance - 35) * (simPerKm * 0.12);
+                    calculatedFee = Math.round(simBase + localPart + bulkPart);
+                    simType = "Usafirishaji wa Pembezoni (Regional)";
+                    simTypeEn = "Regional Doorstep Delivery";
+                    formulaExplained = `${formatCurrency(simBase)} (Msingi) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} bei ya upunguzaji) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(simBase)} (Base) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} wholesale rate) = ${formatCurrency(calculatedFee)}`;
+                    etaExplained = "Ndani ya saa 4 - 8 za kazi";
+                    etaExplainedEn = "Within 4 - 8 business hours";
+                  } else {
+                    // Inter-regional cargo transit
+                    const weightKg = simWeight;
+                    const baseCargoRate = 100; // 1 TZS/kg/km
+                    const cargoDropFee = 4000;
+                    const finalMileFee = 5000;
+                    
+                    const distanceCost = simDistance * weightKg * (baseCargoRate / 100);
+                    calculatedFee = Math.round(cargoDropFee + distanceCost + finalMileFee);
+                    
+                    simType = "Kusafirishwa Mkoani kwa Basi / Cargo (Inter-regional)";
+                    simTypeEn = "Inter-regional Bus/Cargo Transit";
+                    formulaExplained = `${formatCurrency(cargoDropFee)} (Kushusha Kituoni) + (${simDistance} Km × ${weightKg} Kg × TZS 1.0) + ${formatCurrency(finalMileFee)} (Mlangoni mwisho) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(cargoDropFee)} (Cargo Drop Fee) + (${simDistance} Km × ${weightKg} Kg × TZS 1.0) + ${formatCurrency(finalMileFee)} (Final Mile Delivery) = ${formatCurrency(calculatedFee)}`;
+                    etaExplained = "Ndani ya siku 1 - 2 za kazi";
+                    etaExplainedEn = "Within 1 - 2 business days";
+                  }
+
+                  return (
+                    <div className="mt-6 border-t border-emerald-200/40 pt-5 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={14} className="text-emerald-600 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                          {isSw ? "Kisimulizi cha Mahesabu na Route UI" : "Interactive Math & Route UI Simulator"}
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                        {isSw
+                          ? "Jaribu jinsi mifumo inavyokadiria gharama na jinsi mteja anavyoona Route UI kwenye Checkout kulingana na umbali (Km). Hii inasaidia kuelewa kwa nini Kiwango cha Juu (Max Km) ni 3000 (ili kufunika mikoa yote ya Tanzania)."
+                          : "Experiment with how the system calculates delivery prices and how the end-user sees the Route UI card during checkout."}
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Controls Panel */}
+                        <div className="bg-white/80 backdrop-blur-xs border border-emerald-100/50 rounded-2xl p-4 space-y-4 text-left">
+                          {/* Distance Slider */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-[10px] font-bold">
+                              <span className="text-slate-500">{isSw ? "Umbali wa Jaribio (Distance):" : "Test Distance:"}</span>
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">{simDistance} Km</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="1200"
+                              value={simDistance}
+                              onChange={(e) => setSimDistance(Number(e.target.value))}
+                              className="w-full accent-emerald-600 cursor-pointer"
+                            />
+                            <div className="flex flex-wrap gap-1 justify-between text-[9px] font-bold text-slate-400 mt-1">
+                              <button type="button" onClick={() => setSimDistance(8)} className="hover:text-emerald-600 transition bg-slate-50 px-1.5 py-0.5 rounded">8 Km (Temeke)</button>
+                              <button type="button" onClick={() => setSimDistance(45)} className="hover:text-emerald-600 transition bg-slate-50 px-1.5 py-0.5 rounded">45 Km (Kibaha)</button>
+                              <button type="button" onClick={() => setSimDistance(190)} className="hover:text-emerald-600 transition bg-slate-50 px-1.5 py-0.5 rounded">190 Km (Morogoro)</button>
+                              <button type="button" onClick={() => setSimDistance(1100)} className="hover:text-emerald-600 transition bg-slate-50 px-1.5 py-0.5 rounded">1100 Km (Mwanza)</button>
+                            </div>
+                          </div>
+
+                          {/* Weight Slider */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-[10px] font-bold">
+                              <span className="text-slate-500">{isSw ? "Uzito wa Mzigo (Weight):" : "Package Weight:"}</span>
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">{simWeight} Kg</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="80"
+                              value={simWeight}
+                              onChange={(e) => setSimWeight(Number(e.target.value))}
+                              className="w-full accent-emerald-600 cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Formula explanation box */}
+                          <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-[10px]">
+                            <p className="font-black uppercase tracking-wider text-slate-400 mb-1">
+                              {isSw ? "Njia ya Ukokotoaji (Active Formula):" : "Mathematical Formula:"}
+                            </p>
+                            <p className="font-black text-slate-800 break-words">{isSw ? formulaExplained : formulaExplainedEn}</p>
+                            <p className="text-[9px] font-semibold text-slate-500 mt-1.5 border-t border-slate-200/60 pt-1">
+                              {isSw 
+                                ? "Kwa safari za mbali sana (>100km), mfumo huacha kutumia bei kwa Km moja kwa moja (ambayo ingekuwa kubwa sana) na badala yake unahamia kwenye mfumo wa Cargo/Basi."
+                                : "For long distances (>100km), the system stops charging purely per-km (which would be extremely expensive) and utilizes intercity cargo rates instead."}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Preview Panel representing "Route UI" seen by customer */}
+                        <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-xl space-y-4 relative overflow-hidden flex flex-col justify-between text-left">
+                          {/* Subdued design highlight */}
+                          <div className="absolute right-0 top-0 w-24 h-24 bg-gradient-to-br from-emerald-500/20 to-transparent rounded-full blur-xl pointer-events-none" />
+
+                          <div>
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-[9px] font-black tracking-widest text-emerald-400 uppercase">
+                                {isSw ? "UHAKIKI WA NJIA (CHECKOUT ROUTE UI)" : "CHECKOUT ROUTE PREVIEW"}
+                              </span>
+                              <span className="text-[9px] bg-white/10 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+                                {simDistance <= 35 ? "local_doorstep" : simDistance <= 100 ? "regional_doorstep" : "intercity_cargo"}
+                              </span>
+                            </div>
+
+                            {/* Route Map Illustration */}
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-3 my-3">
+                              <div className="flex items-center justify-between relative">
+                                {/* Dotted Connection Line */}
+                                <div className="absolute left-6 right-6 top-1/2 border-t-2 border-dashed border-white/20 -translate-y-1/2 z-0" />
+                                
+                                {/* Animated Truck Icon on the line */}
+                                <div 
+                                  className="absolute top-1/2 -translate-y-1/2 z-10 transition-all duration-500 bg-emerald-500 text-white p-1 rounded-full shadow-md"
+                                  style={{ 
+                                    left: `${Math.min(84, Math.max(10, (simDistance / 1200) * 80))}%` 
+                                  }}
+                                >
+                                  <Truck size={12} className="animate-pulse" />
+                                </div>
+
+                                <div className="z-10 bg-slate-800 border border-white/10 p-1.5 rounded-xl text-center">
+                                  <span className="block text-[8px] font-bold text-slate-400">SHOP</span>
+                                  <span className="text-xs">🏪</span>
+                                </div>
+
+                                <div className="z-10 bg-slate-800 border border-white/10 p-1.5 rounded-xl text-center">
+                                  <span className="block text-[8px] font-bold text-slate-400">CLIENT</span>
+                                  <span className="text-xs">🏠</span>
+                                </div>
+                              </div>
+
+                              <div className="flex justify-between text-[9px] font-bold text-slate-400 mt-2">
+                                <span>{isSw ? "Dar es Salaam (Duka)" : "Dar es Salaam (Store)"}</span>
+                                <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono">
+                                  {simDistance} Km · {Math.max(15, Math.round(simDistance * 1.5))} mins
+                                </span>
+                                <span>{isSw ? "Mteja (Anwani)" : "Customer (Address)"}</span>
+                              </div>
+                            </div>
+
+                            {/* Customer options card simulation */}
+                            <div className="bg-white/10 rounded-2xl p-3 border border-white/5 text-left space-y-2">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="text-[11px] font-black text-white">{isSw ? simType : simTypeEn}</p>
+                                  <p className="text-[9px] text-slate-400 font-semibold flex items-center gap-1 mt-0.5">
+                                    <Clock size={10} className="text-emerald-400" />
+                                    <span>{isSw ? etaExplained : etaExplainedEn}</span>
+                                  </p>
+                                </div>
+                                <span className="text-xs font-black text-emerald-400 font-mono">
+                                  {formatCurrency(calculatedFee)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-white/10 pt-3 flex justify-between items-center text-[9px] text-slate-400 font-semibold mt-2">
+                            <span>{isSw ? "✓ Google Maps Active" : "✓ Google Maps Active"}</span>
+                            <span>{isSw ? "Zana ya Ufafanuzi wa Route" : "Orbi Route Helper"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="border-t border-slate-100 pt-5 flex justify-end items-center gap-4">
