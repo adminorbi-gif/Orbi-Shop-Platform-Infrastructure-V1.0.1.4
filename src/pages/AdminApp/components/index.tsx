@@ -248,6 +248,7 @@ import {
   UserCheck,
   ArrowLeft,
   Wheat,
+  MapPin,
 } from "lucide-react";
 import { getProductMOQ } from "../../../utils/pricing";
 import {
@@ -10076,6 +10077,7 @@ export function SettingsAdmin() {
   const [nichesSaved, setNichesSaved] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
   const [deliveryRules, setDeliveryRules] = useState<DeliveryRule[]>([]);
+  const [deliverySettings, setDeliverySettings] = useState<any>({});
   const [deliveryZonePlaces, setDeliveryZonePlaces] = useState<Record<string, GooglePlaceDetails | null>>({});
   const [deliverySaved, setDeliverySaved] = useState(false);
   const [serviceHealth, setServiceHealth] = useState<any>(null);
@@ -10428,6 +10430,7 @@ export function SettingsAdmin() {
     Waves,
     Webcam,
     Wheat,
+  MapPin,
   };
 
   const handleScanNiches = async () => {
@@ -10771,14 +10774,19 @@ export function SettingsAdmin() {
         console.warn("Failed loading service health:", err);
         return null;
       }),
+      db.getDeliverySettings().catch((err) => {
+        console.warn("Failed loading delivery settings:", err);
+        return {};
+      }),
     ])
-      .then(([res, niches, traConfig, prods, zones, rules, health]) => {
+      .then(([res, niches, traConfig, prods, zones, rules, health, delSet]) => {
         setSettings(res || {});
         setSysNiches(niches || []);
         setProducts(prods || []);
         setDeliveryZones(zones || []);
         setDeliveryRules(rules || []);
         setServiceHealth(health);
+        setDeliverySettings(delSet || {});
         if (traConfig) {
           setTraTin(traConfig.tin || "");
           setTraCertKey(traConfig.certKey || "");
@@ -10908,8 +10916,11 @@ export function SettingsAdmin() {
       }))
       .filter((rule) => rule.zoneId && rule.deliveryClass);
     await db.saveDeliveryRules(cleanRules);
+    await db.saveInvoiceSettings(settings);
+    await db.saveDeliverySettings(deliverySettings);
     setDeliveryZones(await db.getDeliveryZones());
     setDeliveryRules(await db.getDeliveryRules());
+    setDeliverySettings(await db.getDeliverySettings());
     setDeliverySaved(true);
     setTimeout(() => setDeliverySaved(false), 3000);
   };
@@ -12467,6 +12478,61 @@ export function SettingsAdmin() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50/60 p-4 sm:p-5 mt-6 mb-6">
+                <div className="mb-4">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                    <MapPin size={14} className="text-emerald-600" />
+                    {isSw ? "Mfumo wa Bei Kwa Umbali (Distance Engine)" : "Distance-Based Delivery Engine"}
+                  </h4>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    {isSw
+                      ? "Tumia Google Maps API kukokotoa bei ya usafirishaji kulingana na umbali (Km) kati ya duka na mteja. Hii itafanya kazi kama mteja ataingiza anwani na 'Delivery Zone' haijafafanuliwa au iko katika 'Auto-detect'."
+                      : "Use Google Maps API to calculate delivery fee based on distance (Km) between seller and customer. This will apply when a precise location is provided."}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                      {isSw ? "Ada ya Msingi (Base Fee)" : "Base Fee"}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deliverySettings.basePriceTzs || 0}
+                      onChange={(e) => setDeliverySettings({ ...deliverySettings, basePriceTzs: Number(e.target.value) })}
+                      className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-semibold outline-none focus:border-emerald-600 transition"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                      {isSw ? "Gharama kwa Km 1" : "Fee per Km"}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deliverySettings.costPerKmTzs || 0}
+                      onChange={(e) => setDeliverySettings({ ...deliverySettings, costPerKmTzs: Number(e.target.value) })}
+                      className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-semibold outline-none focus:border-emerald-600 transition"
+                      placeholder="e.g. 500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                      {isSw ? "Kiwango cha Juu (Max Km)" : "Max Distance (Km)"}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deliverySettings.maxDistanceKm || 0}
+                      onChange={(e) => setDeliverySettings({ ...deliverySettings, maxDistanceKm: Number(e.target.value) })}
+                      className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-xs font-semibold outline-none focus:border-emerald-600 transition"
+                      placeholder="e.g. 50"
+                    />
+                  </div>
                 </div>
               </div>
 

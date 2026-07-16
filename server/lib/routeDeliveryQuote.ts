@@ -1,4 +1,4 @@
-import { applyCartDeliveryAdjustments, quoteCartDelivery, quoteProductDelivery, getProductDeliveryClass } from "./deliveryQuote.js";
+import { applyCartDeliveryAdjustments, quoteCartDelivery, quoteProductDelivery, getProductDeliveryClass, getBillableWeightKg } from "./deliveryQuote.js";
 import { DEFAULT_DELIVERY_SETTINGS, DeliverySettings, mapDeliverySettings } from "./deliverySettings.js";
 import { resolveShippingPlan } from "./shippingIntelligence.js";
 
@@ -198,12 +198,15 @@ const getClassRatePerKm = (deliveryClass: string) => {
   }
 };
 
-const routeEta = (durationSeconds: number, deliveryClass: string, lang = "sw") => {
+const routeEta = (durationSeconds: number, deliveryClass: string, lang = "sw", shippingType?: string) => {
   const handlingMinutes =
     deliveryClass === "fresh_food" ? 45 :
     deliveryClass === "bulky" || deliveryClass === "heavy" ? 180 :
     90;
-  const totalMinutes = Math.max(45, Math.round(durationSeconds / 60) + handlingMinutes);
+  let totalMinutes = Math.max(45, Math.round(durationSeconds / 60) + handlingMinutes);
+  if (shippingType === "normal_cargo") {
+    totalMinutes *= 2.5; // Normal cargo is slower
+  }
 
   if (totalMinutes <= 8 * 60) {
     const minHours = Math.max(1, Math.ceil(totalMinutes / 60));
@@ -218,20 +221,74 @@ const routeEta = (durationSeconds: number, deliveryClass: string, lang = "sw") =
   return lang === "sw" ? `${minDays}-${maxDays} siku` : `${minDays}-${maxDays} days`;
 };
 
-const routeFee = (product: any, quantity: number, distanceMeters: number, fallbackFee: number) => {
+const routeFee = (product: any, quantity: number, distanceMeters: number, durationSeconds: number, fallbackFee: number, shippingType?: string) => {
   const deliveryClass = getProductDeliveryClass(product);
   const distanceKm = Math.max(1, distanceMeters / 1000);
   const baseFee = deliveryClass === "heavy" ? 5000 : deliveryClass === "bulky" ? 3500 : 1800;
-  const classDistanceFee = distanceKm * getClassRatePerKm(deliveryClass);
+  
+  let classDistanceFee = 0;
+  if (distanceKm <= 35) {
+    classDistanceFee = distanceKm * getClassRatePerKm(deliveryClass);
+  } else if (distanceKm <= 100) {
+    const localPart = 35 * getClassRatePerKm(deliveryClass);
+    const bulkRatePerKm = getClassRatePerKm(deliveryClass) * 0.12; 
+    classDistanceFee = localPart + ((distanceKm - 35) * bulkRatePerKm);
+  } else {
+    // For inter-regional distances (>100km), we use a flat max logic for the distance component
+    // because packages go via intercity bus/cargo networks which charge by weight/volume (fallbackFee),
+    // not by pure per-km transport rates. We add a small final-mile fee instead.
+    classDistanceFee = 0; 
+  }
+
+  const speedKph = distanceKm / Math.max(0.1, (durationSeconds / 3600));
+  let remoteSurcharge = 0;
+  // Apply remote surcharge only if it's local/regional or final mile
+  if (distanceKm > 15 && speedKph < 25) {
+    // If it's slow, it's likely a rural area (Geographical restriction). Add surcharge.
+    remoteSurcharge = Math.min(25000, (25 - speedKph) * 300 * Math.max(1, Math.min(distanceKm, 50) / 20));
+  }
+
   const handlingFee =
     (product?.fragile ? 1000 : 0) +
     (product?.oversized ? 2500 : 0) +
     ((product?.requiresColdChain || product?.requires_cold_chain) ? 2500 : 0);
-  const quantityMultiplier = Math.max(1, Math.sqrt(Math.max(1, Number(quantity || 1))));
-  const calculated = Math.round((baseFee + classDistanceFee + handlingFee) * quantityMultiplier);
 
-  // Route pricing should improve local accuracy, but not silently undercharge long/complex orders.
-  return distanceKm <= 35 ? calculated : Math.max(calculated, Math.round(Number(fallbackFee || 0) * 0.75));
+  const quantityMultiplier = Math.max(1, Math.sqrt(Math.max(1, Number(quantity || 1))));
+  
+  // If distance > 100km, the primary cost is the fallbackFee (cargo/bus rate based on weight/zone), 
+  // plus final-mile and handling.
+  if (distanceKm > 100) {
+    const finalMileFee = Math.max(5000, remoteSurcharge);
+    
+    const rawQuantity = Math.max(1, Number(quantity || 1));
+    const weightKg = getBillableWeightKg(product) * rawQuantity;
+    const baseCargoRate = deliveryClass === "heavy" ? 150 : deliveryClass === "bulky" ? 120 : 100;
+    const cargoDropFee = deliveryClass === "heavy" ? 10000 : deliveryClass === "bulky" ? 7000 : 4000;
+    
+    const ratePerKmPerKg = baseCargoRate / 100;
+    const distanceCost = distanceKm * weightKg * ratePerKmPerKg;
+    let finalRate = ratePerKmPerKg;
+    if (shippingType === "fast_bus") {
+      finalRate *= 1.8; // Fast bus is 80% more expensive on distance
+    }
+    const distanceCostFinal = distanceKm * weightKg * finalRate;
+    const cargoCost = cargoDropFee + distanceCostFinal;
+    
+    // Cap at the fallback fee (maximum expected for the 'Other Regions' zone)
+    // but ensure it scales down gracefully for closer regions like Morogoro/Tanga
+    let scaledFallbackFee = Math.min(Number(fallbackFee || 0), cargoCost);
+    
+    // Minimum boundary check for inter-regional parcels
+    const minInterRegionalFee = Math.max(5000, weightKg * 500); 
+    scaledFallbackFee = Math.max(minInterRegionalFee, scaledFallbackFee);
+
+    return Math.round(scaledFallbackFee + finalMileFee + handlingFee);
+  }
+
+  const calculated = Math.round((baseFee + classDistanceFee + handlingFee + remoteSurcharge) * quantityMultiplier);
+
+  // Return max of calculated vs fallback for local routes
+  return Math.max(calculated, Math.round(Number(fallbackFee || 0) * 0.75));
 };
 
 export const quoteCartRouteDelivery = async (
@@ -286,8 +343,8 @@ export const quoteCartRouteDelivery = async (
       const deliveryClass = getProductDeliveryClass(product);
       return {
         ...fallbackItem,
-        fee: routeFee(product, item.quantity, route.distanceMeters, fallbackItem.fee),
-        eta: routeEta(route.durationSeconds, deliveryClass, lang),
+        fee: routeFee(product, item.quantity, route.distanceMeters, route.durationSeconds, fallbackItem.fee, (options as any).shippingType),
+        eta: routeEta(route.durationSeconds, deliveryClass, lang, (options as any).shippingType),
         quoteMode: route.provider === "google_routes" ? "route_exact" : "route_estimate",
         routeProvider: route.provider,
         route: {

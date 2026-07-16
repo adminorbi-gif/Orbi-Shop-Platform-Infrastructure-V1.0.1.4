@@ -28,6 +28,9 @@ const PICKUP_HUBS = [
   { id: "dodoma-cbd", name: "Dodoma - City Pickup", city: "Dodoma", lat: -6.1630, lng: 35.7516 },
   { id: "mbeya-cbd", name: "Mbeya - City Cargo", city: "Mbeya", lat: -8.9094, lng: 33.4608 },
   { id: "morogoro-cbd", name: "Morogoro - Msamvu Cargo", city: "Morogoro", lat: -6.8229, lng: 37.6618 },
+  { id: "kigoma-ujiji", name: "Kigoma - Ujiji Cargo", city: "Kigoma", lat: -4.8856, lng: 29.6240 },
+  { id: "tarime-bus", name: "Tarime - Central Bus Pickup", city: "Tarime", lat: -1.3468, lng: 34.3725 },
+  { id: "kahama-cbd", name: "Kahama - Town Cargo", city: "Kahama", lat: -3.8375, lng: 32.6000 },
 ];
 
 const haversineKm = (a: Coordinate, b: Coordinate) => {
@@ -63,18 +66,18 @@ const buildShippingOptions = (settings: DeliverySettings) => [
     pickupRequired: false,
   },
   {
-    id: "bus_cargo",
-    labelSw: "Basi / Cargo Pickup",
-    labelEn: "Bus / Cargo pickup",
+    id: "fast_bus",
+    labelSw: "Faster Transit Bus (1-2 Days)",
+    labelEn: "Faster Transit Bus (1-2 Days)",
     maxDistanceKm: settings.maxDistanceKm,
     maxWeightKg: settings.busCargoMaxWeightKg,
     maxVolumetricKg: settings.busCargoMaxVolumetricKg,
     pickupRequired: true,
   },
   {
-    id: "cargo",
-    labelSw: "Cargo maalum",
-    labelEn: "Dedicated cargo",
+    id: "normal_cargo",
+    labelSw: "Normal Cargo (Gharama nafuu)",
+    labelEn: "Normal Cargo (Economical)",
     maxDistanceKm: settings.maxDistanceKm,
     maxWeightKg: settings.cargoMaxWeightKg,
     maxVolumetricKg: settings.cargoMaxVolumetricKg,
@@ -108,7 +111,7 @@ export const resolveShippingPlan = ({
   const pickupHub = isRuralOrLongDistance ? nearestPickupHub(destination) : null;
   const recommended =
     eligibleOptions.find((option) => !option.pickupRequired && !isRuralOrLongDistance) ||
-    eligibleOptions.find((option) => option.id === "bus_cargo") ||
+    eligibleOptions.find((option) => option.id === "fast_bus") ||
     eligibleOptions.find((option) => option.id === "cargo") ||
     null;
 

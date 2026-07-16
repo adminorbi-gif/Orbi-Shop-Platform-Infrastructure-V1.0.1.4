@@ -435,7 +435,7 @@ export const db = {
     const res = await apiFetch('/api/v1/settings/service-health');
     return res.data;
   },
-  getDeliveryQuote: async (payload: { cart: any[]; zoneId: string; lang?: string; origin?: GeoCoordinate; destination?: GeoCoordinate & { address?: string; placeId?: string }; applyInsurance?: boolean }): Promise<DeliveryQuote> => {
+  getDeliveryQuote: async (payload: { cart: any[]; zoneId: string; lang?: string; origin?: GeoCoordinate; destination?: GeoCoordinate & { address?: string; placeId?: string }; applyInsurance?: boolean; shippingType?: string }): Promise<DeliveryQuote> => {
     const res = await apiFetch('/api/v1/delivery/quote', {
       method: 'POST',
       body: JSON.stringify(payload)

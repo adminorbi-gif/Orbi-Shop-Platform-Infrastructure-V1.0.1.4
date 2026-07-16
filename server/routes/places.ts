@@ -309,4 +309,43 @@ router.get("/static-map", async (req, res) => {
   }
 });
 
+router.post("/validate", async (req, res) => {
+  try {
+    const apiKey = getGoogleMapsKey();
+    if (!apiKey) {
+      return res.status(400).json({ success: false, error: "API_KEY_REQUIRED" });
+    }
+
+    const { address, regionCode = "TZ" } = req.body;
+    if (!address) {
+      return res.status(400).json({ success: false, error: "ADDRESS_REQUIRED" });
+    }
+
+    const response = await fetch("https://addressvalidation.googleapis.com/v1:validateAddress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+      },
+      body: JSON.stringify({
+        address: {
+          regionCode,
+          addressLines: [address],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Address validation failed: ${response.status} - ${text}`);
+    }
+
+    const data = await response.json();
+    res.json({ success: true, data });
+  } catch (error: any) {
+    console.error("POST /api/v1/places/validate error:", error.message || error);
+    res.status(500).json({ success: false, error: error.message || "ADDRESS_VALIDATION_FAILED" });
+  }
+});
+
 export default router;

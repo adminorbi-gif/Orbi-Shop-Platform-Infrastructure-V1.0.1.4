@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { PriceDisplay } from "../PriceDisplay";
 import { formatCurrency } from "../../lib/storage";
 import { db } from "../../lib/db";
-import type { DeliveryQuote, DeliveryZone } from "../../types";
+import type { DeliveryQuote, DeliveryZone, GooglePlaceDetails } from "../../types";
 import { DEFAULT_DELIVERY_ZONES, formatDeliveryDays, getDeliveryZoneName, normalizeDeliveryZones } from "../../lib/deliveryZones";
 import { useDialog } from "../CustomDialogContext";
 import { ImageWithSkeleton } from "../ImageWithSkeleton";
+import { GooglePlacePicker } from "../GooglePlacePicker";
 
 interface CheckoutViewProps {
   showCheckout: boolean;
@@ -47,10 +48,12 @@ export function CheckoutView({
   const [touched, setTouched] = useState({ name: false, phone: false, address: false });
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [isOrdering, setIsOrdering] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceDetails | null>(null);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(DEFAULT_DELIVERY_ZONES);
   const [selectedDeliveryZoneId, setSelectedDeliveryZoneId] = useState(DEFAULT_DELIVERY_ZONES[0].id);
   const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuote | null>(null);
   const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
+  const [selectedShippingOptionId, setSelectedShippingOptionId] = useState<string | null>(null);
   const selectedDeliveryZone = useMemo(() => {
     return normalizeDeliveryZones(deliveryZones).find((zone) => zone.id === selectedDeliveryZoneId) || normalizeDeliveryZones(deliveryZones)[0];
   }, [deliveryZones, selectedDeliveryZoneId]);
@@ -124,17 +127,27 @@ export function CheckoutView({
     }
 
     setDeliveryQuoteLoading(true);
+    const destination = selectedPlace && selectedPlace.lat && selectedPlace.lng
+      ? { lat: selectedPlace.lat, lng: selectedPlace.lng, address: selectedPlace.formattedAddress || selectedPlace.name, placeId: selectedPlace.placeId }
+      : undefined;
     db.getDeliveryQuote({
       zoneId: selectedDeliveryZoneId,
       lang,
+      destination,
       cart: cart.map((item: any) => ({
         productId: item.product?.id,
         quantity: parseInt(item.quantity, 10) || 1,
       })),
       applyInsurance: false,
+      shippingType: selectedShippingOptionId || undefined,
     })
       .then((quote) => {
-        if (active) setDeliveryQuote(quote);
+        if (active) {
+          setDeliveryQuote(quote);
+          if (!selectedShippingOptionId && quote?.shippingPlan?.recommended) {
+            setSelectedShippingOptionId(quote.shippingPlan.recommended.id);
+          }
+        }
       })
       .catch((error) => {
         console.warn("Delivery quote failed, using fallback zone fee:", error);
@@ -147,7 +160,7 @@ export function CheckoutView({
     return () => {
       active = false;
     };
-  }, [selectedDeliveryZoneId, cart, lang]);
+  }, [selectedDeliveryZoneId, cart, lang, selectedPlace, selectedShippingOptionId]);
 
   const validateCoupon = () => {
     const found = coupons.find(c => c.code === details.couponCode && c.active);
@@ -173,6 +186,7 @@ export function CheckoutView({
       }
       await handlePlaceOrder({
         ...details,
+        destination: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng, address: selectedPlace.formattedAddress, placeId: selectedPlace.placeId } : undefined,
         cart,
         appliedCoupon,
         finalTotal: total,
@@ -319,6 +333,32 @@ export function CheckoutView({
                           ? `${deliveryQuote?.selectedShippingType?.label || deliveryQuote?.zoneName || getDeliveryZoneName(selectedDeliveryZone, lang)} · ${deliveryQuote?.eta || ""} · ${formatCurrency(deliveryFee)}`
                           : (lang === "sw" ? "Delivery ya sasa inahitaji eneo halisi la Google Maps." : "Current delivery pricing requires an exact Google Maps location.")}
                     </p>
+                    {deliveryQuote?.shippingPlan?.shippingOptions && deliveryQuote.shippingPlan.shippingOptions.length > 0 ? (
+                      <div className="mt-4 space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          {lang === "sw" ? "Aina ya Usafirishaji" : "Shipping Method"}
+                        </label>
+                        <div className="grid grid-cols-1 gap-2">
+                          {deliveryQuote.shippingPlan.shippingOptions.map((opt: any) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => setSelectedShippingOptionId(opt.id)}
+                              className={`flex items-center justify-between rounded-xl border p-3 text-left transition-colors ${selectedShippingOptionId === opt.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-200 bg-white hover:border-primary/30"}`}
+                            >
+                              <div>
+                                <p className="text-xs font-bold text-slate-800">{opt.label}</p>
+                                {opt.eta && <p className="text-[10px] text-slate-500">{opt.eta}</p>}
+                              </div>
+                              {opt.fee !== undefined ? (
+                                <p className="text-sm font-black text-primary">{formatCurrency(opt.fee)}</p>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    
                     {deliveryQuote?.shippingPlan?.message ? (
                       <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-[11px] font-bold text-blue-800">
                         {deliveryQuote.shippingPlan.message}
@@ -422,22 +462,18 @@ export function CheckoutView({
 
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{lang === "sw" ? "Anwani ya Makazi/Ofisi" : "Delivery Address"}</label>
-                    <div className="relative">
-                      <MapPin className={`absolute left-4 top-1/2 -translate-y-1/2 ${touched.address && currentErrors.address ? 'text-red-400' : 'text-slate-400'}`} size={16} />
-                      <input
-                        type="text"
-                        name="checkout_address"
-                        autoComplete="street-address"
-                        value={details.address}
-                        onBlur={() => handleBlur('address')}
-                        onChange={(e) => setDetails({ ...details, address: e.target.value })}
-                        placeholder="e.g. Mwanza, Rock City, Mtaa wa Pamba"
-                        className={`w-full bg-slate-50 border rounded-2xl pl-12 pr-4 py-3.5 text-sm font-bold focus:bg-white transition-all outline-none ${touched.address && currentErrors.address ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-100 focus:border-primary focus:ring-4 focus:ring-primary/10'}`}
-                      />
-                    </div>
-                    {touched.address && currentErrors.address && (
-                      <p className="text-[11px] text-red-500 font-medium mt-1 ml-1 flex items-center gap-1"><Info size={12}/> {currentErrors.address}</p>
-                    )}
+                    <GooglePlacePicker
+                      lang={lang as any}
+                      value={details.address}
+                      selectedPlace={selectedPlace}
+                      onAddressChange={(value) => {
+                        setDetails({ ...details, address: value });
+                        setTouched({ ...touched, address: true });
+                      }}
+                      onPlaceSelect={(place) => setSelectedPlace(place)}
+                      placeholder="e.g. Mwanza, Rock City, Mtaa wa Pamba"
+                      error={touched.address && currentErrors.address ? currentErrors.address : undefined}
+                    />
                   </div>
 
                   <button 

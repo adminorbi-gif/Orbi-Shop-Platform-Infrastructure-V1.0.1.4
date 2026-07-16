@@ -95,7 +95,7 @@ export const getProductDeliveryClass = (product: any) => {
   return "standard";
 };
 
-const getBillableWeightKg = (product: any, volumetricDivisor = DEFAULT_DELIVERY_SETTINGS.volumetricDivisor) => {
+export const getBillableWeightKg = (product: any, volumetricDivisor = DEFAULT_DELIVERY_SETTINGS.volumetricDivisor) => {
   const actual = Math.max(0.1, Number(product?.weightKg ?? product?.weight_kg ?? 1));
   const length = Number(product?.lengthCm ?? product?.length_cm ?? 0);
   const width = Number(product?.widthCm ?? product?.width_cm ?? 0);

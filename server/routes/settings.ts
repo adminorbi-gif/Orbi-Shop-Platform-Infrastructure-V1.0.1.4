@@ -254,6 +254,9 @@ router.post("/invoice", async (req, res) => {
         appBarBackground3: settings.appBarBackground3,
         appBarColor: settings.appBarColor,
         disableAppBarAnimations: !!settings.disableAppBarAnimations,
+        deliveryFeePerKm: settings.deliveryFeePerKm,
+        deliveryBaseFee: settings.deliveryBaseFee,
+        deliveryMaxDistanceKm: settings.deliveryMaxDistanceKm,
       };
       
       const { data: existAppSet } = await getSupabase(req).from('promotions').select('id').eq('title', 'SYSTEM_APP_SETTINGS').maybeSingle();
