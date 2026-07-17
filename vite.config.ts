@@ -7,11 +7,7 @@ export default defineConfig(({ mode }) => {
   
   const supabaseUrl = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || env.SUPABASE_URL;
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-  const gmpKey = process.env.GOOGLE_MAPS_ROUTES_API_KEY || env.GOOGLE_MAPS_ROUTES_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_MAPS_PLACES_API_KEY || env.GOOGLE_MAPS_PLACES_API_KEY ||
-    process.env.GOOGLE_MAPS_PLATFORM_KEY || env.GOOGLE_MAPS_PLATFORM_KEY ||
-    process.env.VITE_GOOGLE_MAPS_PLATFORM_KEY || env.VITE_GOOGLE_MAPS_PLATFORM_KEY || "";
+  const gmpKey = process.env.GOOGLE_MAPS_API_KEY || env.GOOGLE_MAPS_API_KEY || "";
   
   return {
     plugins: [react(), tailwindcss()],
@@ -48,7 +44,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(supabaseUrl || ""),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseKey || ""),
-      'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(gmpKey || "")
+      'process.env.GOOGLE_MAPS_API_KEY': JSON.stringify(gmpKey || "")
     }
   };
 });

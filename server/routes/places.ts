@@ -2,12 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-const getGoogleMapsKey = () =>
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  process.env.GOOGLE_MAPS_PLACES_API_KEY ||
-  process.env.GOOGLE_MAPS_API_KEY ||
-  process.env.GOOGLE_MAPS_ROUTES_API_KEY ||
-  "";
+const getGoogleMapsKey = () => process.env.GOOGLE_MAPS_API_KEY || "";
 
 const normalizeLang = (lang: any) => (String(lang || "sw").toLowerCase().startsWith("sw") ? "sw" : "en");
 

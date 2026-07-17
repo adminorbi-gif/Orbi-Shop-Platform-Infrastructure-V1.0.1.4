@@ -404,12 +404,7 @@ router.post("/delivery-settings", async (req, res) => {
 router.get("/service-health", async (req, res) => {
   const checkedAt = new Date().toISOString();
   const services: any[] = [];
-  const googlePlacesKeyConfigured = Boolean(
-    process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-    process.env.GOOGLE_MAPS_PLACES_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_MAPS_ROUTES_API_KEY,
-  );
+  const googlePlacesKeyConfigured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
 
   const routeHealth = getRouteDeliveryHealth();
   services.push({

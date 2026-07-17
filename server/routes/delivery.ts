@@ -104,6 +104,7 @@ const attachSellerPickupLocations = async (client: any, cart: any[]) => {
 const handleDeliveryQuote = async (req: any, res: any) => {
   try {
     const { cart, zoneId, lang = "sw", origin, destination, applyInsurance } = req.body || {};
+    console.error("[Delivery Quote Debug] Received:", { cartCount: cart?.length, zoneId, destination });
     if (!Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ success: false, error: "CART_REQUIRED" });
     }

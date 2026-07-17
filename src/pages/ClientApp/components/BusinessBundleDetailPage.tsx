@@ -35,12 +35,7 @@ import { PriceDisplay } from '../../../components/PriceDisplay';
 import { motion, AnimatePresence } from 'motion/react';
 import { ImageWithSkeleton } from '../../../components/ImageWithSkeleton';
 
-const GOOGLE_MAPS_API_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_ROUTES_API_KEY ||
-  (globalThis as any).GOOGLE_MAPS_PLATFORM_KEY ||
-  '';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
 
 const hasValidKey = Boolean(GOOGLE_MAPS_API_KEY) && GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY' && GOOGLE_MAPS_API_KEY !== '';
 
@@ -53,8 +48,8 @@ function MapInstructionsSplash({ lang }: { lang: 'sw' | 'en' }) {
       </h4>
       <p className="text-[10px] text-slate-500 font-medium max-w-xs mt-1.5 leading-relaxed">
         {lang === 'sw' 
-          ? 'Tafadhali weka secret yenye jina GOOGLE_MAPS_PLATFORM_KEY kwenye mipangilio ya AI Studio (Gear Icon ⚙️ -> Secrets) ili kuwezesha ramani halisi ya usafirishaji.'
-          : 'Please add a secret named GOOGLE_MAPS_PLATFORM_KEY in AI Studio Settings (Gear Icon ⚙️ -> Secrets) to enable interactive Google Maps.'}
+          ? 'Tafadhali weka secret yenye jina GOOGLE_MAPS_API_KEY kwenye mipangilio ya AI Studio (Gear Icon ⚙️ -> Secrets) ili kuwezesha ramani halisi ya usafirishaji.'
+          : 'Please add a secret named GOOGLE_MAPS_API_KEY in AI Studio Settings (Gear Icon ⚙️ -> Secrets) to enable interactive Google Maps.'}
       </p>
     </div>
   );

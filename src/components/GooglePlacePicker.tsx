@@ -161,7 +161,7 @@ export function GooglePlacePicker({
 
         {suggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-[80] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            {suggestions.map((suggestion) => (
+            {Array.isArray(suggestions) && suggestions.map((suggestion) => (
               <button
                 key={suggestion.placeId}
                 type="button"

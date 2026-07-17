@@ -82,7 +82,7 @@ const estimateRoadRoute = (origin: Coordinate, destination: Coordinate) => {
 };
 
 const computeGoogleRoute = async (origin: Coordinate, destination: Coordinate) => {
-  const apiKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return null;
 
   routeMetrics.googleCalls += 1;
@@ -404,7 +404,7 @@ export const quoteCartRouteDelivery = async (
 };
 
 export const getRouteDeliveryHealth = () => {
-  const apiKeyConfigured = Boolean(process.env.GOOGLE_MAPS_PLATFORM_KEY || process.env.GOOGLE_MAPS_ROUTES_API_KEY || process.env.GOOGLE_MAPS_API_KEY);
+  const apiKeyConfigured = Boolean(process.env.GOOGLE_MAPS_API_KEY);
   const googleStatus =
     !apiKeyConfigured ? "not_configured" :
     routeMetrics.lastGoogleOkAt ? "ok" :
