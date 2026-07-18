@@ -642,6 +642,32 @@ Buyer message: "${buyerMessage}"`;
   }
   app.use("/uploads", express.static(uploadsDir));
 
+  // Serve robots.txt dynamically to ensure the correct Sitemap URL is exposed for search indexation
+  app.get("/robots.txt", (req, res) => {
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.get("host");
+    const activeAppUrl = process.env.APP_URL 
+      ? process.env.APP_URL.replace(/\/$/, "") 
+      : `${protocol}://${host}`;
+
+    res.type("text/plain");
+    res.send(`User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /sellers
+Disallow: /checkout
+Disallow: /track/
+Disallow: /*?auth=
+Disallow: /*?cart=
+Disallow: /*?checkout=
+Disallow: /*?profile=
+Disallow: /*?seller-signup=
+
+Sitemap: ${activeAppUrl}/sitemap.xml`);
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

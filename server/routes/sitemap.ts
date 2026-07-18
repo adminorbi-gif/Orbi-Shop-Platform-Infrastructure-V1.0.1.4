@@ -17,8 +17,8 @@ const slugify = (text: string) => {
 router.get("/", async (req, res) => {
   const protocol = req.headers["x-forwarded-proto"] || req.protocol;
   const host = req.get("host");
-  const baseUrl = process.env.NODE_ENV === "production"
-    ? "https://shop.orbifinancial.com"
+  const baseUrl = process.env.APP_URL
+    ? process.env.APP_URL.replace(/\/$/, "")
     : `${protocol}://${host}`;
 
   res.header("Content-Type", "application/xml");

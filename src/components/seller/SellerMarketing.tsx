@@ -226,23 +226,23 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Intro Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 text-white p-6 rounded-3xl shadow-md relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-950 text-white p-6 rounded-3xl shadow-lg shadow-slate-950/10 relative overflow-hidden border border-slate-900">
         <div className="absolute right-0 top-0 opacity-10 translate-x-12 -translate-y-6 select-none pointer-events-none">
           <Megaphone size={160} />
         </div>
-        <div className="space-y-1 relative z-10 font-sans">
+        <div className="space-y-1.5 relative z-10 font-sans">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-emerald-600 rounded-lg text-white">
+            <span className="p-1.5 bg-amber-500 rounded-xl text-slate-950">
               <Megaphone size={14} />
             </span>
-            <span className="text-[10px] font-bold tracking-widest text-emerald-400 uppercase">
+            <span className="text-[10px] font-extrabold tracking-widest text-amber-400 uppercase">
               {lang === "sw" ? "MATANGAZO YA KULIPIA (CPC)" : "PREPAID SPONSORED CAMPAIGNS (CPC)"}
             </span>
           </div>
           <h1 className="text-xl font-black tracking-tight text-white block">
             {lang === "sw" ? "Meneja wa Matangazo ya Duka" : "Marketing & Ad Placements Hub"}
           </h1>
-          <p className="text-slate-300 text-xs">
+          <p className="text-slate-400 text-xs max-w-xl">
             {lang === "sw"
               ? "Tangaza bidhaa zako moja kwa moja kwenye soko kuu na uruhusu bofya za kulipia kuelekeza wateja kwako."
               : "Increase sales by sponsoring products, tracking actual impressions, click conversions, and CPC budgets."}
@@ -254,7 +254,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
             resetForm();
             setShowModal(true);
           }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase px-5 py-3 rounded-2xl cursor-pointer transition active:scale-[0.98] flex items-center gap-1.5 shadow self-start sm:self-center"
+          className="bg-white hover:bg-slate-50 text-slate-950 font-black text-[10px] uppercase px-5 py-3.5 rounded-2xl border border-slate-200 cursor-pointer transition active:scale-[0.98] flex items-center gap-1.5 shadow-sm self-start sm:self-center shrink-0"
         >
           <Plus size={14} />
           {lang === "sw" ? "Tangaza Bidhaa" : "Sponsor Products"}
@@ -263,67 +263,75 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
 
       {/* Stats Cards Dashboard */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-[1.45rem] border border-slate-200/80 shadow-xs flex flex-col justify-between group hover:shadow-md hover:border-slate-300 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
               {lang === "sw" ? "Kuonekana (Impressions)" : "Impressions"}
             </span>
-            <Eye size={16} />
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-slate-100 transition duration-300 text-slate-500">
+              <Eye size={15} />
+            </div>
           </div>
           <div className="mt-2.5">
-            <p className="text-xl font-black text-slate-900 font-mono">
+            <p className="text-2xl font-black text-slate-900 font-mono">
               {stats.totalImpressions.toLocaleString()}
             </p>
-            <p className="text-[10px] text-slate-400 font-semibold">
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
               {lang === "sw" ? "Kwenye kurasa za wateja" : "Views on customer feed"}
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-[1.45rem] border border-slate-200/80 shadow-xs flex flex-col justify-between group hover:shadow-md hover:border-slate-300 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
               {lang === "sw" ? "Mibofyo (Clicks)" : "Ad Clicks"}
             </span>
-            <MousePointerClick size={16} />
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition duration-300 text-slate-500">
+              <MousePointerClick size={15} />
+            </div>
           </div>
           <div className="mt-2.5">
-            <p className="text-xl font-black text-slate-900 font-mono">
+            <p className="text-2xl font-black text-slate-900 font-mono">
               {stats.totalClicks.toLocaleString()}
             </p>
-            <p className="text-[10px] text-slate-400 font-semibold">
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
               {lang === "sw" ? "Wateja waliofungua bango" : "Redirect clicks to store"}
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-[1.45rem] border border-slate-200/80 shadow-xs flex flex-col justify-between group hover:shadow-md hover:border-slate-300 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
               CTR (Conversion)
             </span>
-            <Percent size={16} />
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-amber-50 group-hover:text-amber-600 transition duration-300 text-slate-500">
+              <Percent size={14} />
+            </div>
           </div>
           <div className="mt-2.5">
-            <p className="text-xl font-black text-emerald-600 font-mono">{avgCtr}%</p>
-            <p className="text-[10px] text-slate-400 font-semibold">
+            <p className="text-2xl font-black text-indigo-600 font-mono">{avgCtr}%</p>
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
               {lang === "sw" ? "Kiwango cha ufanisi" : "Click-through performance"}
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-[1.45rem] border border-slate-200/80 shadow-xs flex flex-col justify-between group hover:shadow-md hover:border-slate-300 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
               {lang === "sw" ? "Gharama ya Matumizi" : "Total Cost (Spent)"}
             </span>
-            <DollarSign size={16} />
+            <div className="shrink-0 w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-slate-100 transition duration-300 text-slate-500">
+              <DollarSign size={15} />
+            </div>
           </div>
           <div className="mt-2.5">
-            <p className="text-xl font-black text-indigo-600 font-mono">
+            <p className="text-2xl font-black text-slate-900 font-mono">
               {formatCurrency(stats.totalSpent)}
             </p>
-            <p className="text-[10px] text-slate-400 font-semibold">
+            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
               {lang === "sw" ? "Inayokatwa kwenye bajeti" : "Deducted from active budget"}
             </p>
           </div>
@@ -331,11 +339,11 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
       </div>
 
       {/* Main campaigns list wrapper */}
-      <div className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-xs space-y-4">
-        <h2 className="text-sm font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
-          <Sparkles size={14} className="text-emerald-500" />
+      <div className="bg-white rounded-[1.65rem] border border-slate-200/80 p-6 shadow-sm space-y-6">
+        <h2 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
+          <Sparkles size={14} className="text-amber-500" />
           {lang === "sw" ? "Orodha ya Kampeni Zangu" : "My Active & Pending Campaigns"}
-          <span className="font-mono text-slate-500">({ads.length})</span>
+          <span className="font-mono text-slate-400">({ads.length})</span>
         </h2>
 
         {loading ? (
@@ -362,7 +370,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
               return (
                 <div
                   key={ad.id}
-                  className="bg-white rounded-2xl border border-slate-150 overflow-hidden flex flex-col justify-between hover:shadow-xs transition-all"
+                  className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between hover:border-slate-300 hover:shadow-md hover:shadow-slate-100 transition-all duration-300"
                 >
                   {/* Creative cover */}
                   <div className="relative h-28 bg-slate-100 overflow-hidden shrink-0">
@@ -376,27 +384,32 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                     {/* Status Badge */}
                     <div className="absolute top-3 left-3">
                       {ad.status === "active" && (
-                        <span className="px-2 py-0.5 rounded bg-emerald-500 text-white text-[8px] font-black uppercase tracking-wider shadow animate-pulse">
+                        <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[8px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>
                           {lang === "sw" ? "LIVE / INARUSHA" : "LIVE / ACTIVE"}
                         </span>
                       )}
                       {ad.status === "pending" && (
-                        <span className="px-2 py-0.5 rounded bg-amber-500 text-white text-[8px] font-black uppercase tracking-wider shadow">
+                        <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                           {lang === "sw" ? "INASUBIRI IDHINI" : "PENDING APPROVAL"}
                         </span>
                       )}
                       {ad.status === "completed" && (
-                        <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[8px] font-black uppercase tracking-wider shadow">
+                        <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[8px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                           {lang === "sw" ? "IMEKWISHA" : "FINISHED / DEPAID"}
                         </span>
                       )}
                       {ad.status === "paused" && (
-                        <span className="px-2 py-0.5 rounded bg-slate-500 text-white text-[8px] font-black uppercase tracking-wider shadow">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200 text-[8px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                           {lang === "sw" ? "IMESITISHWA" : "PAUSED"}
                         </span>
                       )}
                       {ad.status === "scheduled" && (
-                        <span className="px-2 py-0.5 rounded bg-indigo-500 text-white text-[8px] font-black uppercase tracking-wider shadow">
+                        <span className="px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[8px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
                           {lang === "sw" ? "IMERATIBIWA" : "SCHEDULED"}
                         </span>
                       )}
@@ -414,7 +427,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                     </p>
 
                     {/* Metrics values */}
-                    <div className="grid grid-cols-3 gap-2 p-2 bg-slate-50 rounded-xl text-center">
+                    <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-center">
                       <div>
                         <p className="text-[8px] font-bold uppercase text-slate-400">
                           {lang === "sw" ? "Mionekano" : "Impressions"}
@@ -429,7 +442,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                       </div>
                       <div>
                         <p className="text-[8px] font-bold uppercase text-slate-400">CTR</p>
-                        <p className="text-[11px] font-black text-emerald-600 font-mono mt-0.5">
+                        <p className="text-[11px] font-black text-indigo-600 font-mono mt-0.5">
                           {ad.metrics?.ctr || 0}%
                         </p>
                       </div>
@@ -448,7 +461,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${
-                            percentSpent >= 100 ? "bg-red-500" : percentSpent > 75 ? "bg-amber-500" : "bg-emerald-600"
+                            percentSpent >= 100 ? "bg-red-500" : percentSpent > 75 ? "bg-amber-500" : "bg-indigo-600"
                           }`}
                           style={{ width: `${percentSpent}%` }}
                         ></div>
@@ -479,7 +492,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
           <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]">
             <div className="bg-slate-950 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <Megaphone className="text-emerald-400" size={16} />
+                <Megaphone className="text-amber-400" size={16} />
                 <h3 className="font-black text-xs uppercase tracking-wider">
                   {lang === "sw" ? "Kampeni Mpya ya Matangazo" : "Deploy Ad Campaign"}
                 </h3>
@@ -499,7 +512,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   {lang === "sw" ? "Chagua Bidhaa ya Kutangaza" : "Target Product"}
                 </label>
                 <select
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none transition"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800"
                   value={selectedProductId}
                   onChange={(e) => handleProductSelect(e.target.value)}
                 >
@@ -521,7 +534,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   type="text"
                   required
                   placeholder={lang === "sw" ? "Mfano: Kahawa nzuri yenye ladha ya asili!" : "Headline that grabs user attention"}
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-bold outline-none transition"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800 placeholder-slate-400/70"
                   value={adTitle}
                   onChange={(e) => setAdTitle(e.target.value)}
                 />
@@ -535,7 +548,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                 <textarea
                   rows={2}
                   placeholder={lang === "sw" ? "Ujumbe mfupi unaoelezea bidhaa au ofa..." : "Short marketing call to action..."}
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none transition resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800 placeholder-slate-400/70 resize-none"
                   value={adDescription}
                   onChange={(e) => setAdDescription(e.target.value)}
                 />
@@ -547,7 +560,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   {lang === "sw" ? "Pakia Bango Kuu la Picha" : "Ad Banner Cover Image"} *
                 </label>
 
-                <div className="border border-dashed border-slate-200 bg-slate-50 p-4 rounded-xl text-center relative hover:bg-slate-55 transition text-slate-400">
+                <div className="border border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 p-5 rounded-xl text-center relative transition text-slate-400 cursor-pointer">
                   <input
                     type="file"
                     accept="image/*"
@@ -565,12 +578,12 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
 
                 {isUploading && (
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[9px] font-bold text-emerald-600">
+                    <div className="flex items-center justify-between text-[9px] font-bold text-indigo-600">
                       <span>{lang === "sw" ? "Inapakia..." : "Uploading creative bango..."}</span>
                       <span>{uploadProgress}%</span>
                     </div>
                     <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-600" style={{ width: `${uploadProgress}%` }}></div>
+                      <div className="h-full bg-indigo-600" style={{ width: `${uploadProgress}%` }}></div>
                     </div>
                   </div>
                 )}
@@ -578,7 +591,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                 <input
                   type="text"
                   placeholder="https://..."
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none transition"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800 placeholder-slate-400/70"
                   value={adImage}
                   onChange={(e) => setAdImage(e.target.value)}
                 />
@@ -610,7 +623,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   type="text"
                   required
                   placeholder="e.g. /?product=PROD-123 or direct URL"
-                  className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none transition"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800 placeholder-slate-400/70"
                   value={adLink}
                   onChange={(e) => setAdLink(e.target.value)}
                 />
@@ -626,7 +639,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                     type="number"
                     min="100"
                     max="2000"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold font-mono outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold font-mono outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(Number(e.target.value))}
                   />
@@ -641,7 +654,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                     type="number"
                     min="10000"
                     step="1000"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold font-mono outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold font-mono outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800"
                     value={budgetLimit}
                     onChange={(e) => setBudgetLimit(Number(e.target.value))}
                   />
@@ -657,7 +670,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   </label>
                   <input
                     type="date"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                   />
@@ -669,7 +682,7 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   </label>
                   <input
                     type="date"
-                    className="w-full bg-slate-50 border border-slate-100 focus:border-slate-300 p-3 rounded-xl text-xs font-semibold outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-semibold outline-none focus:border-slate-950 focus:bg-white transition duration-200 text-slate-800"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
@@ -681,13 +694,13 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-black text-[10px] uppercase cursor-pointer transition active:scale-[0.98]"
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-black text-xs uppercase cursor-pointer transition active:scale-[0.98]"
                 >
                   {lang === "sw" ? "Ghairi" : "Cancel"}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black text-[10px] uppercase cursor-pointer transition active:scale-[0.98]"
+                  className="flex-1 bg-slate-950 hover:bg-slate-900 text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider cursor-pointer transition active:scale-[0.98] shadow-md shadow-slate-950/10"
                 >
                   {lang === "sw" ? "Tuma Ombi" : "Submit Campaign"}
                 </button>

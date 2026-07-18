@@ -57,7 +57,9 @@ import {
   Activity,
   MessageSquare,
   Loader2,
-  Download
+  Download,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react";
 import { getProductMOQ } from "../../utils/pricing";
 import { ChatWidget } from "../../components/chat/ChatWidget";
@@ -658,11 +660,6 @@ export default function SellerApp({
     section: "basics" | "pricing" | "media" | "specs" | "publish",
   ) => {
     setProductFormSection(section);
-    window.setTimeout(() => {
-      document
-        .getElementById(`product-studio-${section}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 20);
   };
 
   const addProductImageUrl = (rawUrl: string) => {
@@ -2668,16 +2665,16 @@ export default function SellerApp({
             {tab === "booster" && (
               <div className="space-y-6 animate-in fade-in duration-200">
                 {/* Refinement: Beautiful premium light gradient matching application color profile */}
-                <div className="bg-gradient-to-br from-emerald-50 via-white to-amber-50/40 text-slate-900 p-6 sm:p-8 rounded-[2rem] shadow-xs relative overflow-hidden border border-emerald-100/80">
-                  <div className="absolute right-0 top-0 opacity-15 translate-x-12 -translate-y-6 select-none pointer-events-none">
-                    <Sparkles size={180} className="text-emerald-500/30" />
+                <div className="bg-gradient-to-br from-slate-50 via-white to-amber-50/20 text-slate-900 p-6 sm:p-8 rounded-[2rem] shadow-sm relative overflow-hidden border border-slate-200/80">
+                  <div className="absolute right-0 top-0 opacity-10 select-none pointer-events-none translate-x-12 -translate-y-6">
+                    <Sparkles size={180} className="text-amber-500/10" />
                   </div>
-                  <div className="space-y-3 relative z-10 font-sans">
+                  <div className="space-y-3.5 relative z-10 font-sans">
                     <div className="flex items-center gap-2">
-                      <span className="p-1.5 bg-emerald-600 rounded-lg text-white">
-                        <Sparkles size={14} className="fill-white" />
+                      <span className="p-1.5 bg-amber-500 rounded-xl text-slate-950 shadow-sm">
+                        <Sparkles size={14} className="fill-slate-950 text-slate-950" />
                       </span>
-                      <span className="text-[10px] font-black tracking-widest text-emerald-700 uppercase">
+                      <span className="text-[10px] font-extrabold tracking-widest text-amber-600 uppercase">
                         {lang === "sw"
                           ? "VIP PREMIUM MARKETING & BOOSTER"
                           : "VIP PREMIUM MARKETING & BOOSTER"}
@@ -2738,17 +2735,17 @@ export default function SellerApp({
 
                         if (unsoldProducts.length === 0) {
                           return (
-                            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-center">
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-center">
                               <Check
-                                className="text-emerald-600 mx-auto mb-2"
+                                className="text-indigo-600 mx-auto mb-2"
                                 size={24}
                               />
-                              <p className="text-xs font-black text-emerald-800 block">
+                              <p className="text-xs font-black text-slate-800 block">
                                 {lang === "sw"
                                   ? "Bidhaa Zote Ziko Kwenye Chati!"
                                   : "Awesome! No Unsold Dead Stock Found"}
                               </p>
-                              <p className="text-[10px] text-emerald-600 mt-0.5">
+                              <p className="text-[10px] text-slate-500 mt-1">
                                 {lang === "sw"
                                   ? "Kila bidhaa katika ghala lako ina mauzo yanayoendelea kikamilifu."
                                   : "Every item in your inventory is successfully generating client-facing sales."}
@@ -2918,24 +2915,24 @@ export default function SellerApp({
                                 onClick={() => handleSelectStrategy("old")}
                                 className={`p-5 rounded-2xl border text-left transition duration-200 flex flex-col justify-between font-sans outline-none relative cursor-pointer ${
                                   activeStrategy === "old"
-                                    ? "border-emerald-600 bg-emerald-50/20 shadow-sm"
+                                    ? "border-amber-500 bg-amber-50/30 shadow-sm"
                                     : activeStrategy === "both"
                                       ? "border-slate-100 bg-slate-50 opacity-70 pointer-events-none"
                                       : "border-slate-150 hover:border-slate-300 bg-white"
                                 }`}
                               >
                                 {activeStrategy === "old" && (
-                                  <span className="absolute top-2.5 right-2.5 p-1 bg-emerald-600 rounded-lg text-white">
+                                  <span className="absolute top-2.5 right-2.5 p-1 bg-amber-500 rounded-lg text-slate-950">
                                     <Check size={10} />
                                   </span>
                                 )}
                                 <div className="space-y-1">
                                   <span
-                                    className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${activeStrategy === "old" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}
+                                    className={`text-[8px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${activeStrategy === "old" ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-slate-100 text-slate-500"}`}
                                   >
                                     {lang === "sw" ? "Mkakati wa 1" : "Mode 1"}
                                   </span>
-                                  <h3 className="font-extrabold text-xs text-slate-800 mt-1.5 uppercase tracking-wider block">
+                                  <h3 className="font-extrabold text-xs text-slate-800 mt-2.5 uppercase tracking-wider block">
                                     {lang === "sw"
                                       ? "Sukuma Bidhaa za Zamani"
                                       : "Push Old Unsold Stocks"}
@@ -2954,24 +2951,24 @@ export default function SellerApp({
                                 onClick={() => handleSelectStrategy("new")}
                                 className={`p-5 rounded-2xl border text-left transition duration-200 flex flex-col justify-between font-sans outline-none cursor-pointer ${
                                   activeStrategy === "new"
-                                    ? "border-emerald-600 bg-emerald-50/20 shadow-sm"
+                                    ? "border-amber-500 bg-amber-50/30 shadow-sm"
                                     : activeStrategy === "both"
                                       ? "border-slate-100 bg-slate-50 opacity-70 pointer-events-none"
                                       : "border-slate-150 hover:border-slate-300 bg-white"
                                 }`}
                               >
                                 {activeStrategy === "new" && (
-                                  <span className="absolute top-2.5 right-2.5 p-1 bg-emerald-600 rounded-lg text-white">
+                                  <span className="absolute top-2.5 right-2.5 p-1 bg-amber-500 rounded-lg text-slate-950">
                                     <Check size={10} />
                                   </span>
                                 )}
                                 <div className="space-y-1">
                                   <span
-                                    className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md ${activeStrategy === "new" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}
+                                    className={`text-[8px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${activeStrategy === "new" ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-slate-100 text-slate-500"}`}
                                   >
                                     {lang === "sw" ? "Mkakati wa 2" : "Mode 2"}
                                   </span>
-                                  <h3 className="font-extrabold text-xs text-slate-800 mt-1.5 uppercase tracking-wider block">
+                                  <h3 className="font-extrabold text-xs text-slate-800 mt-2.5 uppercase tracking-wider block">
                                     {lang === "sw"
                                       ? "Sukuma Bidhaa Mpya"
                                       : "Push Fresh New Products"}
@@ -3025,12 +3022,12 @@ export default function SellerApp({
                   {/* RIGHT COLUMN: PAY TO UPGRADE & BOOST GATEWAY (5/12 width) */}
                   <div className="lg:col-span-5 space-y-6">
                     {/* Visual upgrade convincing card - themed to match application color profile */}
-                    <div className="bg-gradient-to-br from-emerald-600 to-teal-750 border border-emerald-500/20 rounded-[2rem] p-6 text-white shadow-md relative overflow-hidden">
+                    <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-[2rem] p-6 text-white shadow-md relative overflow-hidden">
                       <div className="absolute right-0 bottom-0 opacity-10 select-none pointer-events-none translate-x-4 translate-y-4">
                         <Zap size={140} className="text-white fill-white" />
                       </div>
                       <div className="relative z-10 space-y-4 font-sans">
-                        <h3 className="font-black text-sm uppercase tracking-wider text-amber-300 block">
+                        <h3 className="font-black text-sm uppercase tracking-wider text-amber-400 block">
                           {lang === "sw"
                             ? "SIRI YA KUUZA ZAIDI"
                             : "WHY ACTIVATE THE BOOSTER?"}
@@ -3038,30 +3035,30 @@ export default function SellerApp({
 
                         <div className="space-y-3">
                           <div className="flex items-start gap-2.5">
-                            <span className="text-amber-300 font-black text-xs select-none">
+                            <span className="text-amber-400 font-black text-xs select-none">
                               ✓
                             </span>
-                            <p className="text-[11px] text-white/95 font-semibold leading-relaxed">
+                            <p className="text-[11px] text-white/90 font-medium leading-relaxed">
                               {lang === "sw"
                                 ? "Unapata kupandishwa hadi VIP na kuonekana kila siku kwenye 'Suggested Product' list."
                                 : "Automatic insertion inside the client's high-traffic 'Suggestions on Shopping Centre' feed."}
                             </p>
                           </div>
                           <div className="flex items-start gap-2.5">
-                            <span className="text-amber-300 font-black text-xs select-none">
+                            <span className="text-amber-400 font-black text-xs select-none">
                               ✓
                             </span>
-                            <p className="text-[11px] text-white/95 font-semibold leading-relaxed">
+                            <p className="text-[11px] text-white/90 font-medium leading-relaxed">
                               {lang === "sw"
                                 ? "Beji rasmi ya VIP Gold itadhibitisha duka lako na kuongeza uaminifu wa kisheria mara mbili zaidi kisaikolojia."
                                 : "VIP Gold verification badge displayed prominently beside your products to double layout conversions."}
                             </p>
                           </div>
                           <div className="flex items-start gap-2.5">
-                            <span className="text-amber-300 font-black text-xs select-none">
+                            <span className="text-amber-400 font-black text-xs select-none">
                               ✓
                             </span>
-                            <p className="text-[11px] text-white/95 font-semibold leading-relaxed">
+                            <p className="text-[11px] text-white/90 font-medium leading-relaxed">
                               {lang === "sw"
                                 ? "Utafutaji na injini ya uchujaji (SEO Search) itakupa kipaumbele cha juu kwa ununuzi wa kitropiki!"
                                 : "Organic search ranking override pushes your items above standard basic/free accounts."}
@@ -3069,13 +3066,13 @@ export default function SellerApp({
                           </div>
                         </div>
 
-                        <div className="pt-3.5 border-t border-emerald-500/30 flex items-center justify-between text-[10px] text-emerald-100 font-bold">
+                        <div className="pt-3.5 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-300 font-bold">
                           <span>
                             {lang === "sw"
                               ? "Boresha duka hapa chini"
                               : "Process upgrade below in steps"}
                           </span>
-                          <span>100% Real-time Activate</span>
+                          <span className="text-amber-400">100% Real-time Activate</span>
                         </div>
                       </div>
                     </div>
@@ -3207,7 +3204,7 @@ export default function SellerApp({
                                   onClick={() => setSelectedPlanId(plan.id)}
                                   className={`p-3.5 rounded-xl border text-left flex justify-between items-center transition duration-150 outline-none cursor-pointer ${
                                     isSelected
-                                      ? "border-emerald-500 bg-emerald-50/35 ring-1 ring-emerald-500/15"
+                                      ? "border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/10"
                                       : "border-slate-150 hover:border-slate-200 bg-white"
                                   }`}
                                 >
@@ -3316,7 +3313,7 @@ export default function SellerApp({
                         <button
                           type="submit"
                           disabled={isUpdatingBooster}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:bg-slate-300 text-white font-black text-[10px] uppercase py-3 rounded-xl cursor-pointer transition shadow flex items-center justify-center gap-1.5"
+                          className="w-full bg-slate-950 hover:bg-slate-900 active:scale-[0.98] disabled:bg-slate-300 text-white font-black text-xs uppercase py-3.5 rounded-xl cursor-pointer transition shadow-md shadow-slate-950/10 flex items-center justify-center gap-1.5"
                         >
                           {isUpdatingBooster ? (
                             <>
@@ -3424,31 +3421,47 @@ export default function SellerApp({
               </div>
 
               <div className="shrink-0 border-b border-slate-100 bg-slate-50/80 px-4 py-3 sm:px-8">
-                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                <div className="flex gap-2 items-center overflow-x-auto no-scrollbar py-1">
                   {[
-                    { id: "basics", label: lang === "sw" ? "Msingi" : "Basics" },
-                    { id: "pricing", label: lang === "sw" ? "Bei & Stock" : "Pricing" },
-                    { id: "media", label: lang === "sw" ? "Picha" : "Media" },
-                    { id: "specs", label: lang === "sw" ? "Maelezo" : "Specs" },
-                    { id: "publish", label: lang === "sw" ? "Chapisha" : "Publish" },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() =>
-                        scrollProductSection(
-                          item.id as "basics" | "pricing" | "media" | "specs" | "publish",
-                        )
-                      }
-                      className={`shrink-0 rounded-2xl px-4 py-2 text-[11px] font-black transition ${
-                        productFormSection === item.id
-                          ? "bg-slate-950 text-white shadow-sm"
-                          : "bg-white text-slate-500 border border-slate-200 hover:text-slate-950"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                    { id: "basics", label: lang === "sw" ? "Taarifa za Msingi" : "Basics", num: 1, ready: prodName.trim().length >= 3 && !!prodNiche && !!prodCategory },
+                    { id: "pricing", label: lang === "sw" ? "Bei & Stoki" : "Pricing", num: 2, ready: (parseFloat(prodPrice) > 0 || prodPricingMode === "wholesale") && Number(prodStock) >= 0 && !!prodSoldBy },
+                    { id: "media", label: lang === "sw" ? "Picha za Bidhaa" : "Media", num: 3, ready: realProductImages.length > 0 },
+                    { id: "specs", label: lang === "sw" ? "Sifa & Maelezo" : "Specs", num: 4, ready: prodDescription.trim().length >= 20 },
+                    { id: "publish", label: lang === "sw" ? "Kagua & Chapisha" : "Publish", num: 5, ready: publishReady },
+                  ].map((item, index, arr) => {
+                    const isActive = productFormSection === item.id;
+                    return (
+                      <React.Fragment key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductFormSection(item.id as any);
+                          }}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-left transition-all shrink-0 cursor-pointer ${
+                            isActive
+                              ? "bg-slate-900 text-white shadow-sm font-black scale-[1.02]"
+                              : "bg-white text-slate-500 border border-slate-200 hover:text-slate-950 hover:border-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold transition ${
+                              isActive
+                                ? "bg-white text-slate-900"
+                                : item.ready
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {item.ready && !isActive ? <Check size={11} className="stroke-[3]" /> : item.num}
+                          </span>
+                          <span className="text-[11px] font-bold tracking-tight">{item.label}</span>
+                        </button>
+                        {index < arr.length - 1 && (
+                          <div className="h-px w-3 sm:w-4 bg-slate-200 shrink-0 self-center hidden sm:block" />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -3456,146 +3469,148 @@ export default function SellerApp({
                 onSubmit={handleSaveProduct}
                 className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 scroll-smooth"
               >
-                <div className="grid grid-cols-1 xl:grid-cols-[1fr_20rem] gap-5">
-                  <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h3 className="text-sm font-black text-slate-950">
-                          {lang === "sw" ? "Product Studio Readiness" : "Product Studio Readiness"}
-                        </h3>
-                        <p className="mt-1 text-[11px] font-medium text-slate-500">
-                          {lang === "sw"
-                            ? "Kagua mambo muhimu kabla bidhaa haijaonekana kwa wateja."
-                            : "Check the essentials before this listing becomes visible to customers."}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
-                          publishReady
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                      >
-                        {publishReady
-                          ? lang === "sw"
-                            ? "Tayari live"
-                            : "Ready"
-                          : lang === "sw"
-                            ? "Bado draft"
-                            : "Draft safe"}
-                      </span>
-                    </div>
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                      {readinessItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className={`flex items-center gap-2 rounded-2xl border px-3 py-2 ${
-                            item.ready
-                              ? "border-emerald-100 bg-white text-emerald-800"
-                              : "border-slate-200 bg-white text-slate-500"
+                {productFormSection === "publish" && (
+                  <div className="grid grid-cols-1 xl:grid-cols-[1fr_20rem] gap-5 animate-in fade-in duration-200">
+                    <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-950">
+                            {lang === "sw" ? "Product Studio Readiness" : "Product Studio Readiness"}
+                          </h3>
+                          <p className="mt-1 text-[11px] font-medium text-slate-500">
+                            {lang === "sw"
+                              ? "Kagua mambo muhimu kabla bidhaa haijaonekana kwa wateja."
+                              : "Check the essentials before this listing becomes visible to customers."}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-[10px] font-black uppercase ${
+                            publishReady
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
                           }`}
                         >
-                          <span
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                              item.ready ? "bg-emerald-600 text-white" : "bg-slate-100"
+                          {publishReady
+                            ? lang === "sw"
+                              ? "Tayari live"
+                              : "Ready"
+                            : lang === "sw"
+                              ? "Bado draft"
+                              : "Draft safe"}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                        {readinessItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`flex items-center gap-2 rounded-2xl border px-3 py-2 ${
+                              item.ready
+                                ? "border-emerald-100 bg-white text-emerald-800"
+                                : "border-slate-200 bg-white text-slate-500"
                             }`}
                           >
-                            {item.ready ? <Check size={12} /> : <Clock size={12} />}
-                          </span>
-                          <span className="text-[10px] font-black leading-tight">
-                            {item.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 sm:p-5">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {lang === "sw" ? "Hali ya media" : "Media status"}
-                    </div>
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-3xl font-black text-slate-950">
-                        {realProductImages.length}
-                      </span>
-                      <span className="text-xs font-bold text-slate-500">
-                        / 5 {lang === "sw" ? "picha" : "images"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                      {lang === "sw"
-                        ? "Picha ya kwanza itakuwa jalada kuu. Unaweza kupakia moja kwa moja kutoka simu."
-                        : "The first image becomes the cover. Upload directly from phone or desktop."}
-                    </p>
-                    <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
-                      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-emerald-700">
-                        <Sparkles size={13} />
-                        {lang === "sw" ? "Usafirishaji Smart" : "Smart Delivery"}
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                                item.ready ? "bg-emerald-600 text-white" : "bg-slate-100"
+                              }`}
+                            >
+                              {item.ready ? <Check size={12} /> : <Clock size={12} />}
+                            </span>
+                            <span className="text-[10px] font-black leading-tight">
+                              {item.label}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                      <p className="mt-2 text-xs font-black text-slate-900">
-                        {smartDeliveryPolicy.summary.title}
-                      </p>
-                      <p className="mt-1 text-[10px] font-semibold leading-relaxed text-slate-500">
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 sm:p-5">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {lang === "sw" ? "Hali ya media" : "Media status"}
+                      </div>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-950">
+                          {realProductImages.length}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">
+                          / 5 {lang === "sw" ? "picha" : "images"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                         {lang === "sw"
-                          ? smartDeliveryPolicy.requiresDeliveryQuote
-                            ? "Bidhaa hii itaomba quote maalum kabla ya malipo."
-                            : "Mfumo utapendekeza gharama na maeneo ya usafirishaji kiotomatiki."
-                          : smartDeliveryPolicy.requiresDeliveryQuote
-                            ? "This product will request a custom delivery quote before payment."
-                            : "The system will automatically suggest delivery cost and coverage."}
+                          ? "Picha ya kwanza utakuwa jalada kuu. Unaweza kupakia moja kwa moja kutoka simu."
+                          : "The first image becomes the cover. Upload directly from phone or desktop."}
                       </p>
+                      <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                          <Sparkles size={13} />
+                          {lang === "sw" ? "Usafirishaji Smart" : "Smart Delivery"}
+                        </div>
+                        <p className="mt-2 text-xs font-black text-slate-900">
+                          {smartDeliveryPolicy.summary.title}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold leading-relaxed text-slate-500">
+                          {lang === "sw"
+                            ? smartDeliveryPolicy.requiresDeliveryQuote
+                              ? "Bidhaa hii itaomba quote maalum kabla ya malipo."
+                              : "Mfumo utapendekeza gharama na maeneo ya usafirishaji kiotomatiki."
+                            : smartDeliveryPolicy.requiresDeliveryQuote
+                              ? "This product will request a custom delivery quote before payment."
+                              : "The system will automatically suggest delivery cost and coverage."}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Product Name & SKU */}
-                <div id="product-studio-basics" className="scroll-mt-28 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                      {lang === "sw" ? "Jina la Bidhaa" : "Product Title"}
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      value={prodName}
-                      onChange={(e) => setProdName(e.target.value)}
-                      placeholder={
-                        lang === "sw"
-                          ? "M.g. iPhone 15 Pro Max"
-                          : "e.g. iPhone 15 Pro Max"
-                      }
-                      className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-medium outline-none focus:border-emerald-600 focus:bg-white transition"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                      SKU / Code{" "}
-                      {lang === "sw" ? "(Kiotomatiki)" : "(Auto-Generated)"}
-                    </label>
-                    <div className="relative">
+                {/* STEP 1: Basics Section */}
+                <div className={productFormSection === "basics" ? "space-y-6 animate-in fade-in duration-200" : "hidden"}>
+                  {/* Product Name & SKU */}
+                  <div id="product-studio-basics" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                        {lang === "sw" ? "Jina la Bidhaa" : "Product Title"}
+                      </label>
                       <input
-                        required
                         type="text"
-                        value={prodSku}
-                        onChange={(e) => setProdSku(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 pl-4 pr-20 py-3 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-600 focus:bg-white transition text-slate-600"
+                        value={prodName}
+                        onChange={(e) => setProdName(e.target.value)}
+                        placeholder={
+                          lang === "sw"
+                            ? "M.g. iPhone 15 Pro Max"
+                            : "e.g. iPhone 15 Pro Max"
+                        }
+                        className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 px-4 py-3 rounded-xl text-xs font-medium outline-none focus:border-emerald-600 focus:bg-white transition"
                       />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const randNum = Math.floor(
-                            100000 + Math.random() * 900000,
-                          );
-                          setProdSku(`ORB-${randNum}`);
-                        }}
-                        className="absolute right-2 top-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-[9px] uppercase tracking-wide transition cursor-pointer"
-                      >
-                        {lang === "sw" ? "Upya" : "Regen"}
-                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                        SKU / Code{" "}
+                        {lang === "sw" ? "(Kiotomatiki)" : "(Auto-Generated)"}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={prodSku}
+                          onChange={(e) => setProdSku(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 pl-4 pr-20 py-3 rounded-xl text-xs font-mono font-bold outline-none focus:border-emerald-600 focus:bg-white transition text-slate-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const randNum = Math.floor(
+                              100000 + Math.random() * 900000,
+                            );
+                            setProdSku(`ORB-${randNum}`);
+                          }}
+                          className="absolute right-2 top-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-[9px] uppercase tracking-wide transition cursor-pointer"
+                        >
+                          {lang === "sw" ? "Upya" : "Regen"}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest">
@@ -3873,7 +3888,10 @@ export default function SellerApp({
                     </select>
                   </div>
                 </div>
+              </div>
 
+              {/* STEP 2: Pricing & Stock Section */}
+              <div className={productFormSection === "pricing" ? "space-y-6 animate-in fade-in duration-200" : "hidden"}>
                 {/* Pricing Mode Selection Box */}
                 <div id="product-studio-pricing" className="scroll-mt-28 bg-slate-50 border border-slate-200/80 p-5 rounded-2xl space-y-4">
                   <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -4223,7 +4241,10 @@ export default function SellerApp({
                     </select>
                   </div>
                 </div>
+              </div>
 
+              {/* STEP 4: Specifications & Description Section */}
+              <div className={productFormSection === "specs" ? "space-y-6 animate-in fade-in duration-200" : "hidden"}>
                 {/* Description */}
                 <div id="product-studio-specs" className="scroll-mt-28 space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -4563,7 +4584,10 @@ export default function SellerApp({
                     ))}
                   </div>
                 </div>
+              </div>
 
+              {/* STEP 3: Media & Images Section */}
+              <div className={productFormSection === "media" ? "space-y-6 animate-in fade-in duration-200" : "hidden"}>
                 {/* Images Config */}
                 <div id="product-studio-media" className="scroll-mt-28 space-y-4">
                   <div className="space-y-1.5">
@@ -4802,7 +4826,10 @@ export default function SellerApp({
                       : "* The first image listed behaves as the primary display cover photo."}
                   </p>
                 </div>
+              </div>
 
+              {/* STEP 5: Review & Publish Section */}
+              <div className={productFormSection === "publish" ? "space-y-6 animate-in fade-in duration-200" : "hidden"}>
                 {/* Visible Toggle */}
                 <div id="product-studio-publish" className="scroll-mt-28 flex items-center justify-between gap-4 bg-slate-50 p-4.5 rounded-xl border border-slate-200/40">
                   <div>
@@ -4845,59 +4872,161 @@ export default function SellerApp({
                     ></div>
                   </button>
                 </div>
+              </div>
 
-                {/* Direct Action buttons */}
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+              {/* Direct Action buttons */}
+              <div className="pt-5 border-t border-slate-100 flex items-center justify-between gap-3 bg-white mt-4">
+                {/* Left-aligned buttons */}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setProductModalOpen(false)}
-                    className="px-4 py-3 sm:px-5 sm:py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center min-w-[3rem]"
+                    className="px-4 py-3 sm:px-5 sm:py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <span className="hidden sm:inline">
-                      {lang === "sw" ? "Ghairi" : "Cancel"}
-                    </span>
-                    <span className="sm:hidden">
-                      <X size={16} />
-                    </span>
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingProduct}
-                    className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs uppercase px-5 py-3 sm:px-7 sm:py-3 rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {savingProduct ? (
-                      <RefreshCw className="animate-spin" size={13} />
-                    ) : (
-                      <Check size={16} className="sm:hidden" />
-                    )}
-                    <span className="hidden sm:inline">
-                      {savingProduct
-                        ? lang === "sw"
-                          ? "Inahifadhi..."
-                          : "Saving listing..."
-                        : lang === "sw"
-                          ? prodVisible
-                            ? "Hifadhi na Chapisha"
-                            : "Hifadhi Draft"
-                          : prodVisible
-                            ? "Save and Publish"
-                            : "Save Draft"}
-                    </span>
-                    <span className="sm:hidden">
-                      {savingProduct
-                        ? lang === "sw"
-                          ? "Inahifadhi"
-                          : "Saving"
-                        : lang === "sw"
-                          ? prodVisible
-                            ? "Chapisha"
-                            : "Draft"
-                          : prodVisible
-                            ? "Publish"
-                            : "Draft"}
-                    </span>
+                    <X size={14} />
+                    <span>{lang === "sw" ? "Ghairi" : "Cancel"}</span>
                   </button>
                 </div>
+
+                {/* Right-aligned Navigation & Action Buttons */}
+                <div className="flex items-center gap-2.5 flex-1 sm:flex-initial justify-end">
+                  {/* Back Button */}
+                  {productFormSection !== "basics" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const steps: ("basics" | "pricing" | "media" | "specs" | "publish")[] = ["basics", "pricing", "media", "specs", "publish"];
+                        const currentIdx = steps.indexOf(productFormSection);
+                        if (currentIdx > 0) {
+                          setProductFormSection(steps[currentIdx - 1]);
+                        }
+                      }}
+                      className="px-4 py-3 sm:px-5 sm:py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <ArrowLeft size={14} />
+                      <span>{lang === "sw" ? "Nyuma" : "Back"}</span>
+                    </button>
+                  )}
+
+                  {/* Next Button */}
+                  {productFormSection !== "publish" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Validate active step first!
+                        if (productFormSection === "basics") {
+                          if (prodName.trim().length < 3) {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Jina la bidhaa lazima liwe na herufi 3 au zaidi."
+                                : "Product title must be at least 3 characters long.",
+                              "error"
+                            );
+                            return;
+                          }
+                          if (!prodSku.trim()) {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Tafadhali weka SKU au bonyeza Regen kuizalisha."
+                                : "Please enter an SKU or click Regen to generate one.",
+                              "error"
+                            );
+                            return;
+                          }
+                          if (!prodNiche || !prodCategory) {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Tafadhali chagua niche na kundi kuu la bidhaa."
+                                : "Please select both a niche market and product category.",
+                              "error"
+                            );
+                            return;
+                          }
+                        } else if (productFormSection === "pricing") {
+                          const priceNum = parseFloat(prodPrice) || 0;
+                          const stockNum = parseInt(prodStock);
+                          if (priceNum <= 0 && prodPricingMode !== "wholesale") {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Tafadhali weka bei sahihi kubwa kuliko 0."
+                                : "Please enter a valid price greater than 0.",
+                              "error"
+                            );
+                            return;
+                          }
+                          if (isNaN(stockNum) || stockNum < 0) {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Tafadhali weka idadi sahihi ya stoki."
+                                : "Please enter a valid stock quantity.",
+                              "error"
+                            );
+                            return;
+                          }
+                          if (!prodSoldBy) {
+                            useToast().addToast(
+                              lang === "sw"
+                                ? "Tafadhali chagua kipimo cha uuzaji (Sold by)."
+                                : "Please select a sales unit measurement (Sold by).",
+                              "error"
+                            );
+                            return;
+                          }
+                          if (prodPricingMode === "wholesale") {
+                            const validTiers = prodWholesaleTiers.filter((t) => t.minQty > 0 && t.price > 0);
+                            if (validTiers.length === 0) {
+                              useToast().addToast(
+                                lang === "sw"
+                                  ? "Tafadhali ongeza angalau kigezo kimoja cha bei ya jumla."
+                                  : "Please add at least one wholesale pricing tier.",
+                                "error"
+                              );
+                              return;
+                            }
+                          }
+                        }
+
+                        // Advance to next step
+                        const steps: ("basics" | "pricing" | "media" | "specs" | "publish")[] = ["basics", "pricing", "media", "specs", "publish"];
+                        const currentIdx = steps.indexOf(productFormSection);
+                        if (currentIdx < steps.length - 1) {
+                          setProductFormSection(steps[currentIdx + 1]);
+                        }
+                      }}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase px-5 py-3 sm:px-6 sm:py-3 rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                    >
+                      <span>{lang === "sw" ? "Ifuatayo" : "Next Step"}</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  ) : (
+                    /* Submit Button (Only on Publish step) */
+                    <button
+                      type="submit"
+                      disabled={savingProduct}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs uppercase px-5 py-3 sm:px-7 sm:py-3 rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                    >
+                      {savingProduct ? (
+                        <RefreshCw className="animate-spin" size={13} />
+                      ) : (
+                        <Check size={16} />
+                      )}
+                      <span>
+                        {savingProduct
+                          ? lang === "sw"
+                            ? "Inahifadhi..."
+                            : "Saving listing..."
+                          : lang === "sw"
+                            ? prodVisible
+                              ? "Hifadhi na Chapisha"
+                              : "Hifadhi Draft"
+                            : prodVisible
+                              ? "Save and Publish"
+                              : "Save Draft"}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
               </form>
             </div>
           </div>

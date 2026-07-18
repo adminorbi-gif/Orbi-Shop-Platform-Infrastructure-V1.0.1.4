@@ -262,7 +262,28 @@ export function ChatWidget({
   const loadConversations = async () => {
     try {
       const data = await fetchConversations(currentUserId, currentUserRole);
-      const deduplicated = deduplicateConversations(data);
+      let deduplicated = deduplicateConversations(data);
+
+      // If user is a seller, make sure there is a conversation with Support
+      if (currentUserRole === "seller") {
+        const hasSupport = deduplicated.some((c: Conversation) => 
+          c.participants.some(p => p.id === "support" || p.id === "00000000-0000-0000-0000-000000000001")
+        );
+        if (!hasSupport) {
+          try {
+            const supportConv = await startConversation([
+              { id: currentUserId, role: currentUserRole, name: currentUserName, avatar: currentUserAvatar },
+              { id: "support", role: "admin", name: "Orbi Shop Support Team", avatar: "https://media-stock.orbifinancial.com/OrbiShop_Logo_Blue.png" }
+            ]);
+            if (supportConv) {
+              deduplicated = [supportConv, ...deduplicated];
+            }
+          } catch (e) {
+            console.warn("Failed to automatically start support conversation for seller:", e);
+          }
+        }
+      }
+
       setConversations(deduplicated);
       
       // Join all conversations so we can receive real-time updates for any of them
