@@ -420,7 +420,6 @@ async function startServer() {
         .update(updateData)
         .eq("id", id)
         .select();
-      
       if (error) throw error;
       res.json(data[0]);
     } catch (err) {

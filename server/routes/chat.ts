@@ -62,6 +62,25 @@ router.get("/conversations", async (req, res) => {
         }]);
 
         // Seed initial community welcoming messages
+        const getDynamicCommunityGreeting = () => {
+          const hour = new Date().getHours();
+          let swGreeting = "Habari za asubuhi wajasiriamali!";
+          let enGreeting = "Good morning entrepreneurs!";
+
+          if (hour >= 12 && hour < 16) {
+            swGreeting = "Habari za mchana wajasiriamali!";
+            enGreeting = "Good afternoon entrepreneurs!";
+          } else if (hour >= 16 && hour < 20) {
+            swGreeting = "Habari za jioni wajasiriamali!";
+            enGreeting = "Good evening entrepreneurs!";
+          } else if (hour >= 20 || hour < 4) {
+            swGreeting = "Habari za usiku wajasiriamali!";
+            enGreeting = "Good night entrepreneurs!";
+          }
+
+          return `${swGreeting} Nafurahi sana kuona jukwaa hili la mawasiliano limerahisishwa. Biashara zetu zitazidi kukuwa zaidi. \n\n${enGreeting} Very happy to see this communication platform simplified. Our businesses will grow even more.`;
+        };
+
         const welcomeMsgs = [
           {
             id: 'msg-welcome-community-1',
@@ -78,7 +97,7 @@ router.get("/conversations", async (req, res) => {
             conversation_id: 'orbi_business_community',
             sender_id: '00000000-0000-0000-0000-000000000001',
             sender_role: 'seller',
-            content: 'Habari za asubuhi wajasiriamali! Nafurahi sana kuona jukwaa hili la mawasiliano limerahisishwa. Biashara zetu zitazidi kukuwa zaidi. \n\nGood morning entrepreneurs! Very happy to see this communication platform simplified. Our businesses will grow even more.',
+            content: getDynamicCommunityGreeting(),
             timestamp: Date.now() - 1000 * 60 * 20,
             is_read: false,
             sender_name: 'Orbi Official Store'

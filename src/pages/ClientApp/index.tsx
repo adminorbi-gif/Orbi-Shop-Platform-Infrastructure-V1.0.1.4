@@ -2888,9 +2888,9 @@ export default function ClientApp() {
 
                                 {/* Bottom section */}
                                 <div className="mt-2 pt-1 border-t border-slate-50">
-                                  <div className={`${hasRange ? "text-xs min-[360px]:text-[13px] min-[400px]:text-sm min-[440px]:text-base sm:text-base md:text-lg" : "text-sm min-[360px]:text-base min-[400px]:text-[17px] min-[440px]:text-lg sm:text-lg md:text-xl"} font-black text-slate-900 leading-tight flex items-center flex-nowrap whitespace-nowrap min-w-0 overflow-hidden`}>
+                                  <div className={`${hasRange ? "text-xs min-[360px]:text-[13px] min-[400px]:text-sm min-[440px]:text-base sm:text-base md:text-lg flex-wrap" : "text-sm min-[360px]:text-base min-[400px]:text-[17px] min-[440px]:text-lg sm:text-lg md:text-xl flex-nowrap whitespace-nowrap overflow-hidden"} font-black text-slate-900 leading-tight flex items-center min-w-0`}>
                                     {hasRange ? (
-                                      <span className="flex items-center flex-nowrap gap-x-0.5 min-w-0 overflow-hidden">
+                                      <span className="flex items-center flex-wrap gap-x-1 gap-y-0.5 min-w-0">
                                         <PriceDisplay amount={displayMin} fromCurrency={product.currency} truncate={false} className="font-black" />
                                         <span className="text-slate-400 font-semibold text-xs px-0.5 shrink-0">–</span>
                                         <PriceDisplay amount={displayMax} fromCurrency={product.currency} truncate={false} className="font-black" />

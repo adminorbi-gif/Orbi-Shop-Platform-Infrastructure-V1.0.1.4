@@ -156,11 +156,11 @@ router.get("/autocomplete", async (req, res) => {
         try {
           suggestions = await searchPlacesNew(input, lang, apiKey);
         } catch (newApiError) {
-          console.warn("[Places] New autocomplete failed, trying legacy API:", (newApiError as any)?.message || newApiError);
+          console.log("[Places] Info: New autocomplete API status (will try legacy):", (newApiError as any)?.message || newApiError);
           suggestions = await searchPlacesLegacy(input, lang, apiKey);
         }
       } catch (apiErr) {
-        console.warn("[Places] API autocomplete failed (billing/quota/network), using local fallback:", (apiErr as any)?.message || apiErr);
+        console.log("[Places] Info: API autocomplete fallback active (using local database):", (apiErr as any)?.message || apiErr);
       }
     }
 
@@ -214,11 +214,11 @@ router.get("/details", async (req, res) => {
         try {
           place = await getPlaceDetailsNew(placeId, lang, apiKey);
         } catch (newApiError) {
-          console.warn("[Places] New details failed, trying legacy API:", (newApiError as any)?.message || newApiError);
+          console.log("[Places] Info: New details API status (will try legacy):", (newApiError as any)?.message || newApiError);
           place = await getPlaceDetailsLegacy(placeId, lang, apiKey);
         }
       } catch (apiErr) {
-        console.warn("[Places] API details failed, using fallback coordinate:", (apiErr as any)?.message || apiErr);
+        console.log("[Places] Info: API details fallback active (using local coordinate):", (apiErr as any)?.message || apiErr);
       }
     }
 

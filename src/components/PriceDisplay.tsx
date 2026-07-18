@@ -86,7 +86,7 @@ export const PriceDisplay: React.FC<PriceDisplayProps> = ({
   return (
     <span
       title={`${targetCurrency} ${new Intl.NumberFormat("en-US", { minimumFractionDigits: finalShowDecimals ? 2 : 0, maximumFractionDigits: finalShowDecimals ? 2 : 0 }).format(val)}`}
-      className={`font-money font-[800] tabular-nums tracking-tight inline-flex min-w-0 max-w-full items-baseline flex-nowrap whitespace-nowrap select-text ${colorClass} ${selectedSizeClass} ${className} transition-all`}
+      className={`font-money font-[800] tabular-nums tracking-tight inline-flex ${truncate ? "min-w-0 max-w-full" : "shrink-0 min-w-max"} items-baseline flex-nowrap whitespace-nowrap select-text ${colorClass} ${selectedSizeClass} ${className} transition-all`}
       style={{ 
         fontVariantNumeric: "tabular-nums",
         userSelect: "text",

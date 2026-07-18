@@ -10094,6 +10094,7 @@ export function SettingsAdmin() {
   });
   const [simDistance, setSimDistance] = useState<number>(25);
   const [simWeight, setSimWeight] = useState<number>(3);
+  const [simVolumetric, setSimVolumetric] = useState<number>(5);
   const [csvInput, setCsvInput] = useState<string>("");
   const [showCsvImporter, setShowCsvImporter] = useState<boolean>(false);
   const [csvImportError, setCsvImportError] = useState<string>("");
@@ -12883,8 +12884,22 @@ export function SettingsAdmin() {
 
                 {/* VISUAL & INTERACTIVE ROUTE ENGINE EXPLAINER */}
                 {(() => {
-                  const simBase = deliverySettings.basePriceTzs ?? 1800;
-                  const simPerKm = deliverySettings.costPerKmTzs ?? 900;
+                  const billableWeight = Math.max(simWeight, simVolumetric);
+                  const simDeliveryClass = billableWeight >= 30 ? "heavy" : billableWeight >= 8 ? "bulky" : "standard";
+
+                  const standardBase = deliverySettings.basePriceTzs ?? 1800;
+                  const standardPerKm = deliverySettings.costPerKmTzs ?? 900;
+                  
+                  let simBase = standardBase;
+                  let simPerKm = standardPerKm;
+                  
+                  if (simDeliveryClass === "heavy") {
+                    simBase = Math.max(5000, standardBase * 2.5);
+                    simPerKm = Math.max(2200, standardPerKm * 2.4);
+                  } else if (simDeliveryClass === "bulky") {
+                    simBase = Math.max(3500, standardBase * 1.9);
+                    simPerKm = Math.max(1600, standardPerKm * 1.7);
+                  }
                   
                   let calculatedFee = 0;
                   let simType = "";
@@ -12894,38 +12909,41 @@ export function SettingsAdmin() {
                   let etaExplained = "";
                   let etaExplainedEn = "";
 
+                  const weightLabel = simVolumetric > simWeight 
+                    ? `${billableWeight} Kg (${isSw ? "Uzito wa Ujazo/Volumetric" : "Volumetric Weight"})` 
+                    : `${billableWeight} Kg (${isSw ? "Uzito Halisi/Physical" : "Physical Weight"})`;
+
                   if (simDistance <= 35) {
                     calculatedFee = Math.round(simBase + (simDistance * simPerKm));
-                    simType = "Usafirishaji wa Mlangoni (Local Doorstep)";
-                    simTypeEn = "Local Doorstep Delivery";
-                    formulaExplained = `${formatCurrency(simBase)} (Ada ya Msingi) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
-                    formulaExplainedEn = `${formatCurrency(simBase)} (Base Fee) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
+                    simType = `Usafirishaji wa Mlangoni (${isSw ? "Mtaani Kwako" : "Local Doorstep"} - ${simDeliveryClass.toUpperCase()})`;
+                    simTypeEn = `Local Doorstep Delivery (${simDeliveryClass.toUpperCase()})`;
+                    formulaExplained = `${formatCurrency(simBase)} (Msingi - ${simDeliveryClass.toUpperCase()}) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(simBase)} (Base - ${simDeliveryClass.toUpperCase()}) + (${simDistance} Km × ${formatCurrency(simPerKm)}) = ${formatCurrency(calculatedFee)}`;
                     etaExplained = "Ndani ya saa 1 - 3 za kazi";
                     etaExplainedEn = "Within 1 - 3 business hours";
                   } else if (simDistance <= 100) {
                     const localPart = 35 * simPerKm;
                     const bulkPart = (simDistance - 35) * (simPerKm * 0.12);
                     calculatedFee = Math.round(simBase + localPart + bulkPart);
-                    simType = "Usafirishaji wa Pembezoni (Regional)";
-                    simTypeEn = "Regional Doorstep Delivery";
-                    formulaExplained = `${formatCurrency(simBase)} (Msingi) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} bei ya upunguzaji) = ${formatCurrency(calculatedFee)}`;
-                    formulaExplainedEn = `${formatCurrency(simBase)} (Base) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} wholesale rate) = ${formatCurrency(calculatedFee)}`;
+                    simType = `Usafirishaji wa Pembezoni (${isSw ? "Wilaya za Jirani" : "Regional"} - ${simDeliveryClass.toUpperCase()})`;
+                    simTypeEn = `Regional Doorstep Delivery (${simDeliveryClass.toUpperCase()})`;
+                    formulaExplained = `${formatCurrency(simBase)} (Msingi - ${simDeliveryClass.toUpperCase()}) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} bei ya upunguzaji) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(simBase)} (Base - ${simDeliveryClass.toUpperCase()}) + (35 Km × ${formatCurrency(simPerKm)}) + (${Math.round(simDistance - 35)} Km × ${formatCurrency(simPerKm * 0.12)} wholesale rate) = ${formatCurrency(calculatedFee)}`;
                     etaExplained = "Ndani ya saa 4 - 8 za kazi";
                     etaExplainedEn = "Within 4 - 8 business hours";
                   } else {
                     // Inter-regional cargo transit
-                    const weightKg = simWeight;
-                    const baseCargoRate = 100; // 1 TZS/kg/km
-                    const cargoDropFee = 4000;
-                    const finalMileFee = 5000;
+                    const baseCargoRate = simDeliveryClass === "heavy" ? 150 : simDeliveryClass === "bulky" ? 120 : 100;
+                    const cargoDropFee = simDeliveryClass === "heavy" ? 10000 : simDeliveryClass === "bulky" ? 7000 : 4000;
+                    const finalMileFee = simDeliveryClass === "heavy" ? 10000 : simDeliveryClass === "bulky" ? 7500 : 5000;
                     
-                    const distanceCost = simDistance * weightKg * (baseCargoRate / 100);
+                    const distanceCost = simDistance * billableWeight * (baseCargoRate / 100);
                     calculatedFee = Math.round(cargoDropFee + distanceCost + finalMileFee);
                     
-                    simType = "Kusafirishwa Mkoani kwa Basi / Cargo (Inter-regional)";
-                    simTypeEn = "Inter-regional Bus/Cargo Transit";
-                    formulaExplained = `${formatCurrency(cargoDropFee)} (Kushusha Kituoni) + (${simDistance} Km × ${weightKg} Kg × TZS 1.0) + ${formatCurrency(finalMileFee)} (Mlangoni mwisho) = ${formatCurrency(calculatedFee)}`;
-                    formulaExplainedEn = `${formatCurrency(cargoDropFee)} (Cargo Drop Fee) + (${simDistance} Km × ${weightKg} Kg × TZS 1.0) + ${formatCurrency(finalMileFee)} (Final Mile Delivery) = ${formatCurrency(calculatedFee)}`;
+                    simType = `Kusafirishwa Mkoani kwa Basi / Cargo (Inter-regional - ${simDeliveryClass.toUpperCase()})`;
+                    simTypeEn = `Inter-regional Bus/Cargo Transit (${simDeliveryClass.toUpperCase()})`;
+                    formulaExplained = `${formatCurrency(cargoDropFee)} (Kushusha Kituoni - ${simDeliveryClass.toUpperCase()}) + (${simDistance} Km × ${weightLabel} × TZS ${(baseCargoRate / 100).toFixed(1)}) + ${formatCurrency(finalMileFee)} (Mlangoni mwisho) = ${formatCurrency(calculatedFee)}`;
+                    formulaExplainedEn = `${formatCurrency(cargoDropFee)} (Cargo Drop Fee - ${simDeliveryClass.toUpperCase()}) + (${simDistance} Km × ${weightLabel} × TZS ${(baseCargoRate / 100).toFixed(1)}) + ${formatCurrency(finalMileFee)} (Final Mile Delivery) = ${formatCurrency(calculatedFee)}`;
                     etaExplained = "Ndani ya siku 1 - 2 za kazi";
                     etaExplainedEn = "Within 1 - 2 business days";
                   }
@@ -12984,6 +13002,27 @@ export function SettingsAdmin() {
                               onChange={(e) => setSimWeight(Number(e.target.value))}
                               className="w-full accent-emerald-600 cursor-pointer"
                             />
+                          </div>
+
+                          {/* Volumetric Weight Slider */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-[10px] font-bold">
+                              <span className="text-slate-500">{isSw ? "Uzito wa Ujazo (Volumetric / Volume):" : "Volumetric Weight (Volume):"}</span>
+                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg">{simVolumetric} Kg</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="80"
+                              value={simVolumetric}
+                              onChange={(e) => setSimVolumetric(Number(e.target.value))}
+                              className="w-full accent-emerald-600 cursor-pointer"
+                            />
+                            <p className="text-[8px] text-slate-400 font-medium leading-normal">
+                              {isSw 
+                                ? "Mfumo hutumia uzito mkubwa zaidi kati ya Uzito wa Mzigo na Uzito wa Ujazo (Math.max)." 
+                                : "The system bills the higher of the actual weight and volumetric weight (Math.max)."}
+                            </p>
                           </div>
 
                           {/* Formula explanation box */}
