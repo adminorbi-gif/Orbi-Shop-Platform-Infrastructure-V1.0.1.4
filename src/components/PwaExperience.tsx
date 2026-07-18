@@ -45,6 +45,10 @@ export function PwaExperience() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [showBoot, setShowBoot] = useState(false);
   const [installedHint, setInstalledHint] = useState(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return !!localStorage.getItem("orbi_shop_pwa_installed_at");
+  });
   const [lang, setLang] = useState<"sw" | "en">(() => {
     if (typeof window === "undefined") return "sw";
     return localStorage.getItem("orbishop_lang") === "en" ? "en" : "sw";
@@ -57,6 +61,23 @@ export function PwaExperience() {
       setShowBoot(true);
       const timeout = window.setTimeout(() => setShowBoot(false), 1500);
       return () => window.clearTimeout(timeout);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    // Check if navigator.getInstalledRelatedApps is available to scan installed state
+    const nav = navigator as any;
+    if (nav.getInstalledRelatedApps) {
+      nav.getInstalledRelatedApps().then((apps: any[]) => {
+        if (apps && apps.length > 0) {
+          setIsInstalled(true);
+          localStorage.setItem("orbi_shop_pwa_installed_at", String(Date.now()));
+        }
+      }).catch((e: any) => {
+        console.warn("Error scanning installed related apps:", e);
+      });
     }
   }, []);
 
@@ -85,12 +106,14 @@ export function PwaExperience() {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallEvent(event as BeforeInstallPromptEvent);
+      setIsInstalled(false);
       triggerPrompt(1500);
     };
 
     const handleAppInstalled = () => {
       localStorage.setItem("orbi_shop_pwa_installed_at", String(Date.now()));
       setInstalledHint(true);
+      setIsInstalled(true);
       setShowPrompt(false);
     };
 
@@ -99,6 +122,7 @@ export function PwaExperience() {
 
     if (hasInstalledHint) {
       setInstalledHint(true);
+      setIsInstalled(true);
     }
 
     // Proactively schedule the PWA notification after 1.5 seconds
@@ -127,6 +151,15 @@ export function PwaExperience() {
     setShowPrompt(false);
   };
 
+  const handleOpenApp = () => {
+    try {
+      window.location.href = "web+orbishop://open";
+    } catch (e) {
+      console.error("Failed to open PWA:", e);
+    }
+    dismissPrompt();
+  };
+
   const installApp = async () => {
     if (!installEvent) {
       if (!installedHint) {
@@ -146,13 +179,19 @@ export function PwaExperience() {
   };
 
   const isSw = lang === "sw";
-  const promptTitle = isSw
-    ? "Fungua au Sakinisha App ya Orbi Shop"
-    : "Open or Install Orbi Shop App";
+  const actuallyInstalled = isInstalled && !installEvent;
 
-  const promptBody = isSw
-    ? "Tafadhali sakinisha Orbi Shop kwenye simu yako kama bado haujasakinisha, au fungua app kutoka kwenye Home Screen yako kwa uzoefu bora na wa haraka zaidi wa ununuzi."
-    : "Please install Orbi Shop on your phone if you haven't yet, or open the app from your Home Screen for a faster, better shopping experience.";
+  const promptTitle = actuallyInstalled
+    ? (isSw ? "Fungua App ya Orbi Shop" : "Open Orbi Shop App")
+    : (isSw ? "Sakinisha App ya Orbi Shop" : "Install Orbi Shop App");
+
+  const promptBody = actuallyInstalled
+    ? (isSw
+        ? "Fungua app ya Orbi Shop kutoka kwenye Home Screen yako kwa uzoefu wa haraka na mzuri zaidi wa ununuzi."
+        : "Open Orbi Shop from your Home Screen for a faster, better shopping experience.")
+    : (isSw
+        ? "Tafadhali sakinisha Orbi Shop kwenye simu yako kwa uzoefu bora na wa haraka zaidi wa ununuzi."
+        : "Please install Orbi Shop on your phone for a faster, better shopping experience.");
 
   return (
     <>
@@ -182,7 +221,16 @@ export function PwaExperience() {
                   </button>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  {installEvent ? (
+                  {actuallyInstalled ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenApp}
+                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-wide text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 active:scale-[0.98]"
+                    >
+                      <Smartphone size={15} />
+                      {isSw ? "Fungua App" : "Open App"}
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={installApp}
@@ -190,15 +238,6 @@ export function PwaExperience() {
                     >
                       <Download size={15} />
                       {isSw ? "Sakinisha Sasa" : "Install Now"}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={dismissPrompt}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-wide text-white shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 active:scale-[0.98]"
-                    >
-                      <Smartphone size={15} />
-                      {isSw ? "Fungua / Sakinisha" : "Open / Install"}
                     </button>
                   )}
                   <button
