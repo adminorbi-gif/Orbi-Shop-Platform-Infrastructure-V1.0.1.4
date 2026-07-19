@@ -9,53 +9,7 @@ import { motion } from "motion/react";
 import { formatCurrency } from "../../lib/storage";
 
 import { ImageWithSkeleton } from "../../components/ImageWithSkeleton";
-
-const MouseTrackZoom: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => {
-  const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({
-    transform: 'scale(1)',
-    transformOrigin: 'center center',
-  });
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - left) / width) * 100;
-    const y = ((e.clientY - top) / height) * 100;
-    setZoomStyle({
-      transform: 'scale(1.5)',
-      transformOrigin: `${x}% ${y}%`,
-    });
-  };
-
-  const handleMouseLeave = () => {
-    setZoomStyle({
-      transform: 'scale(1)',
-      transformOrigin: 'center center',
-    });
-  };
-
-  return (
-    <div 
-      className={`overflow-hidden relative ${className}`}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      style={{ cursor: 'pointer' }}
-    >
-      <div 
-        style={{
-          ...zoomStyle,
-          transition: 'transform 0.1s ease-out, transform-origin 0.1s ease-out',
-          width: '100%',
-          height: '100%',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-};
+import MouseTrackZoom from "../MouseTrackZoom";
 
 interface ProductGridProps {
   products: any[];
