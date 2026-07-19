@@ -2069,14 +2069,15 @@ export function CheckoutModal({
         setStep(3);
       } else {
         const timeoutLike = resp.status === 504 || data?.code === "ORBI_PAY_GATEWAY_TIMEOUT";
+        const timeoutMessage = lang === "sw"
+          ? "Ombi la malipo limetumwa ORBI. Fungua app ya ORBI na uthibitishe ombi; usirudie checkout mara nyingi."
+          : "The payment request was sent to ORBI. Open the ORBI app and approve it; do not repeat checkout multiple times.";
         setGatewayResponse({
           status: timeoutLike ? "processing" : "failed",
           rawStatus: `http_${resp.status}`,
-          message: data?.error || (timeoutLike
-            ? (lang === "sw"
-              ? "Njia ya malipo imechelewa kujibu. Usirudie kulipa mara nyingi; jaribu tena baada ya muda mfupi au wasiliana nasi kama pesa imekatwa."
-              : "The payment route took too long to respond. Do not pay repeatedly; retry shortly or contact support if money was deducted.")
-            : "Failed to process order securely."),
+          message: timeoutLike
+            ? timeoutMessage
+            : data?.error || "Failed to process order securely.",
           paymentCategory: selectedPaymentRoute.category,
           paymentRail: selectedPaymentRoute.rail,
           providerCode: selectedPaymentRoute.providerCode || null,

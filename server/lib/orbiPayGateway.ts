@@ -43,7 +43,7 @@ export async function callOrbiPayGateway(path: string, options: PayGatewayReques
     throw new Error("ORBI Shop Pay Gateway service key is required. Set ORBI_SHOP_PAY_API_KEY.");
   }
 
-  const timeoutMs = Number(process.env.ORBI_PAY_GATEWAY_TIMEOUT_MS || 12000);
+  const timeoutMs = Number(process.env.ORBI_PAY_GATEWAY_TIMEOUT_MS || 45000);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
