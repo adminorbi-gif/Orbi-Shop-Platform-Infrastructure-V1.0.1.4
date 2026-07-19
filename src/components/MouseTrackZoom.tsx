@@ -125,10 +125,15 @@ export const MouseTrackZoom: React.FC<MouseTrackZoomProps> = ({ children, classN
         onTouchStart={(e) => {
           e.stopPropagation();
         }}
-        className="absolute right-2 bottom-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm ring-1 ring-slate-200/50 backdrop-blur-xs transition hover:scale-110 active:scale-95"
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsOpen(true);
+        }}
+        className="absolute right-3 bottom-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-lg ring-1 ring-slate-200/60 backdrop-blur-md transition-all hover:scale-110 active:scale-95 sm:h-9 sm:w-9"
         title="Zoom details"
       >
-        <ZoomIn size={13} className="stroke-[2.5]" />
+        <ZoomIn size={18} className="stroke-[2.5] sm:size-15" />
       </button>
 
       {/* Modal Lightbox */}

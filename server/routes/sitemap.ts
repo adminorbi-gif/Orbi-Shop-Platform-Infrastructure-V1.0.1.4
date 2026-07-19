@@ -26,12 +26,39 @@ router.get("/", async (req, res) => {
   const smStream = new SitemapStream({ hostname: baseUrl });
 
   smStream.write({ url: '/', changefreq: 'daily', priority: 1.0 });
-  smStream.write({ url: '/niche/electronics-tech', changefreq: 'daily', priority: 0.8 });
-  smStream.write({ url: '/niche/fashion-apparel', changefreq: 'daily', priority: 0.8 });
-  smStream.write({ url: '/niche/home-furniture', changefreq: 'daily', priority: 0.8 });
-  smStream.write({ url: '/niche/health-beauty', changefreq: 'daily', priority: 0.8 });
-  smStream.write({ url: '/niche/auto-motors', changefreq: 'daily', priority: 0.8 });
-  smStream.write({ url: '/niche/supermarket-food', changefreq: 'daily', priority: 0.8 });
+
+  try {
+    // Dynamically retrieve active niches from the database
+    const { data: dbNiches, error: nicheError } = await supabase
+      .from("niches")
+      .select("name");
+
+    if (dbNiches && dbNiches.length > 0) {
+      dbNiches.forEach((n: any) => {
+        smStream.write({ url: `/niche/${slugify(n.name)}`, changefreq: 'daily', priority: 0.8 });
+      });
+      // Always write the "Realtime" niche link as it represents dynamic physical shopping hubs
+      smStream.write({ url: '/niche/realtime', changefreq: 'daily', priority: 0.8 });
+    } else {
+      // Fallback
+      smStream.write({ url: '/niche/electronics-tech', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/fashion-apparel', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/home-furniture', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/health-beauty', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/auto-motors', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/supermarket-food', changefreq: 'daily', priority: 0.8 });
+      smStream.write({ url: '/niche/realtime', changefreq: 'daily', priority: 0.8 });
+    }
+  } catch (err) {
+    console.warn("Sitemap niches fetch failed, using fallback list:", err);
+    smStream.write({ url: '/niche/electronics-tech', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/fashion-apparel', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/home-furniture', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/health-beauty', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/auto-motors', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/supermarket-food', changefreq: 'daily', priority: 0.8 });
+    smStream.write({ url: '/niche/realtime', changefreq: 'daily', priority: 0.8 });
+  }
 
   try {
     const { data: products, error } = await supabase
