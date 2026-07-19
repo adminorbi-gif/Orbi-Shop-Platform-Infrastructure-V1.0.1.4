@@ -2,6 +2,7 @@ type PayGatewayRequestOptions = {
   method?: string;
   body?: Record<string, unknown>;
   serviceKey?: string;
+  idempotencyKey?: string;
 };
 
 export function getOrbiPayGatewayBaseUrl() {
@@ -32,6 +33,12 @@ export function getPayServiceKey(req?: any) {
 export async function callOrbiPayGateway(path: string, options: PayGatewayRequestOptions = {}) {
   const baseUrl = requireOrbiPayGatewayBaseUrl();
   const serviceKey = options.serviceKey || getPayServiceKey();
+  const idempotencyKey = String(
+    options.idempotencyKey ||
+      (options.body as any)?.idempotencyKey ||
+      (options.body as any)?.idempotency_key ||
+      "",
+  ).trim();
   if (!serviceKey) {
     throw new Error("ORBI Shop Pay Gateway service key is required. Set ORBI_SHOP_PAY_API_KEY.");
   }
@@ -48,6 +55,13 @@ export async function callOrbiPayGateway(path: string, options: PayGatewayReques
         "x-orbi-pay-service-key": serviceKey,
         "x-orbi-app-id": process.env.ORBI_CORE_APP_ID || "orbi-shop",
         "x-orbi-app-origin": process.env.ORBI_CORE_APP_ORIGIN || "https://shop.orbifinancial.com",
+        ...(idempotencyKey
+          ? {
+              "idempotency-key": idempotencyKey,
+              "x-idempotency-key": idempotencyKey,
+              "x-orbi-idempotency-key": idempotencyKey,
+            }
+          : {}),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,

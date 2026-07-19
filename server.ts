@@ -39,6 +39,7 @@ import promotionsRouter from "./server/routes/promotions.js";
 import reviewsRouter from "./server/routes/reviews.js";
 import searchRouter from "./server/routes/search.js";
 import ecosystemSearchRouter from "./server/routes/ecosystemSearch.js";
+import identityRouter from "./server/routes/identity.js";
 import settingsRouter from "./server/routes/settings.js";
 import sitemapRouter from "./server/routes/sitemap.js";
 import stockNotificationsRouter from "./server/routes/stockNotifications.js";
@@ -541,6 +542,8 @@ async function startServer() {
   app.use("/api/v1/search", looseLimiter, searchRouter);
   app.use("/api/search", looseLimiter, searchRouter);
   app.use("/api/ecosystem-search", looseLimiter, ecosystemSearchRouter);
+  app.use("/api/v1/identity", strictLimiter, identityRouter);
+  app.use("/api/identity", strictLimiter, identityRouter);
   app.use("/api/v1/settings", looseLimiter, settingsRouter);
   app.use("/api/sitemap", looseLimiter, sitemapRouter);
   app.use("/sitemap.xml", looseLimiter, sitemapRouter);

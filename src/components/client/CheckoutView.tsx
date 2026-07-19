@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { X, ArrowLeft, ShieldCheck, Zap, Info, ChevronRight, CheckCircle2, MapPin, Phone, User as UserIcon, Tag, CreditCard, Lock, ArrowRight, Package } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { PriceDisplay } from "../PriceDisplay";
@@ -48,6 +48,7 @@ export function CheckoutView({
   const [touched, setTouched] = useState({ name: false, phone: false, address: false });
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [isOrdering, setIsOrdering] = useState(false);
+  const checkoutIdempotencyRef = useRef("");
   const [selectedPlace, setSelectedPlace] = useState<GooglePlaceDetails | null>(null);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(DEFAULT_DELIVERY_ZONES);
   const [selectedDeliveryZoneId, setSelectedDeliveryZoneId] = useState(DEFAULT_DELIVERY_ZONES[0].id);
@@ -186,8 +187,15 @@ export function CheckoutView({
             : "Select an exact Google Maps location or enter your address so the system can calculate the live route.",
         );
       }
+      if (!checkoutIdempotencyRef.current) {
+        const randomPart = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        checkoutIdempotencyRef.current = `orbishop-checkout-${randomPart}`;
+      }
       await handlePlaceOrder({
         ...details,
+        idempotencyKey: checkoutIdempotencyRef.current,
         destination: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng, address: selectedPlace.formattedAddress, placeId: selectedPlace.placeId } : undefined,
         cart,
         appliedCoupon,
@@ -208,6 +216,7 @@ export function CheckoutView({
         paymentCategory: details.paymentMethod === "escrow" ? "orbi" : undefined,
         paymentRail: details.paymentMethod === "escrow" ? "orbi_wallet" : undefined
       });
+      checkoutIdempotencyRef.current = "";
       setShowCheckout(false);
     } catch (err: any) {
       showAlert(err.message, "error");

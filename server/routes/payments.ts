@@ -414,11 +414,26 @@ async function initiatePaySafeEscrow(req: any) {
   });
 
   console.log(`Initiating live ORBI PaySafe escrow for Order ${orderId} of ${currency} ${amount}`);
+  const idempotencyKey = String(
+    req.get?.("idempotency-key") ||
+      req.get?.("x-idempotency-key") ||
+      req.get?.("x-orbi-idempotency-key") ||
+      req.body?.idempotencyKey ||
+      req.body?.idempotency_key ||
+      "",
+  ).trim();
 
   const result = await callOrbiPayGateway("/v1/paysafe/escrows", {
     method: "POST",
     serviceKey: getPayServiceKey(req),
+    idempotencyKey: idempotencyKey || undefined,
     body: {
+      ...(idempotencyKey
+        ? {
+            idempotencyKey,
+            idempotency_key: idempotencyKey,
+          }
+        : {}),
       reference: String(orderId),
       amount: Number(amount),
       currency,
@@ -441,6 +456,7 @@ async function initiatePaySafeEscrow(req: any) {
       metadata: {
         source: "orbi-shop",
         shopOrderId: orderId,
+        idempotencyKey: idempotencyKey || undefined,
         paymentCategory: route.paymentCategory,
         paymentRail: route.paymentRail,
         providerCode: route.providerCode,

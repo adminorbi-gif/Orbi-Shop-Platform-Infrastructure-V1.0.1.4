@@ -1557,6 +1557,7 @@ export function CheckoutModal({
   const [step, setStep] = useState(1);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [gatewayResponse, setGatewayResponse] = useState<any>(null);
+  const checkoutIdempotencyRef = useRef("");
   const [touched, setTouched] = useState({ name: false, phone: false, address: false });
 
   const hasWholesale = useMemo(() => {
@@ -1634,6 +1635,10 @@ export function CheckoutModal({
 
   // USSD Mobile Money Push-to-Pay Integration States
   const [ussdPhone, setUssdPhone] = useState(defaultPhone);
+  const [orbiIdentity, setOrbiIdentity] = useState<any>(null);
+  const [orbiIdentityKey, setOrbiIdentityKey] = useState("");
+  const [orbiIdentityLoading, setOrbiIdentityLoading] = useState(false);
+  const [orbiIdentityError, setOrbiIdentityError] = useState("");
   const [ussdCarrier, setUssdCarrier] = useState("M-Pesa");
   const [ussdPin, setUssdPin] = useState("");
   const [ussdStatus, setUssdStatus] = useState<
@@ -1786,6 +1791,9 @@ export function CheckoutModal({
   ];
   const effectivePaymentMethod = normalizePaymentMethod(paymentMethod);
   const selectedPaymentRoute = paymentRoutes.find((route) => route.id === effectivePaymentMethod) || paymentRoutes[1];
+  const currentIdentityInput = ussdPhone.trim();
+  const orbiIdentityConfirmed = effectivePaymentMethod !== "orbi_wallet" ||
+    (Boolean(orbiIdentity?.id) && orbiIdentityKey === currentIdentityInput);
   const isPaying = Boolean(loadingMsg);
   const gatewayStatus = String(gatewayResponse?.status || "").toLowerCase();
   const gatewayIsHeld = gatewayStatus === "held";
@@ -1809,6 +1817,51 @@ export function CheckoutModal({
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (effectivePaymentMethod !== "orbi_wallet") {
+      setOrbiIdentity(null);
+      setOrbiIdentityKey("");
+      setOrbiIdentityError("");
+    }
+  }, [effectivePaymentMethod]);
+
+  const resolveOrbiIdentity = async () => {
+    const identifier = currentIdentityInput;
+    if (identifier.length < 3) {
+      setOrbiIdentity(null);
+      setOrbiIdentityKey("");
+      setOrbiIdentityError(lang === "sw" ? "Weka ORBI ID, simu au email." : "Enter ORBI ID, phone, or email.");
+      return;
+    }
+
+    setOrbiIdentityLoading(true);
+    setOrbiIdentityError("");
+    try {
+      const response = await fetch("/api/identity/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success || !data?.data?.id) {
+        throw new Error(data?.message || data?.error || "IDENTITY_NOT_FOUND");
+      }
+      if (data.data.activeForPayments === false) {
+        throw new Error(lang === "sw"
+          ? "Akaunti hii haiwezi kufanya malipo kwa sasa."
+          : "This account cannot make payments right now.");
+      }
+      setOrbiIdentity(data.data);
+      setOrbiIdentityKey(identifier);
+    } catch (error: any) {
+      setOrbiIdentity(null);
+      setOrbiIdentityKey("");
+      setOrbiIdentityError(error?.message || (lang === "sw" ? "Hatukuweza kupata akaunti hiyo." : "We could not find that account."));
+    } finally {
+      setOrbiIdentityLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -1863,11 +1916,14 @@ export function CheckoutModal({
     }
     
     if (normalizedMethod !== "tz_bank" && !ussdPhone) {
-      showAlert(lang === "sw" ? "Tafadhali jaza namba ya simu au kumbukumbu kwa usahihi" : "Please enter phone number or reference correctly", "error");
+      showAlert(lang === "sw" ? "Tafadhali jaza taarifa ya malipo kwa usahihi" : "Please enter payment details correctly", "error");
       return;
     }
 
-    setLoadingMsg(t(lang, "checkout.loading"));
+    if (normalizedMethod === "orbi_wallet" && !orbiIdentityConfirmed) {
+      showAlert(lang === "sw" ? "Hakiki ORBI ID, simu au email kabla ya kuendelea." : "Verify the ORBI ID, phone, or email before continuing.", "error");
+      return;
+    }
 
     try {
       if (deliveryQuote && !deliveryQuote.available) {
@@ -1884,14 +1940,27 @@ export function CheckoutModal({
         return;
       }
 
+      setLoadingMsg(t(lang, "checkout.loading"));
+      if (!checkoutIdempotencyRef.current) {
+        const randomPart = typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        checkoutIdempotencyRef.current = `orbishop-checkout-${randomPart}`;
+      }
+      const checkoutIdempotencyKey = checkoutIdempotencyRef.current;
       const checkoutCart = cart.map((item: any) => ({
         productId: item.product?.id,
         quantity: parseInt(item.quantity, 10) || 1,
       }));
       const resp = await fetch("/api/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": checkoutIdempotencyKey,
+          "X-Idempotency-Key": checkoutIdempotencyKey,
+        },
         body: JSON.stringify({
+          idempotencyKey: checkoutIdempotencyKey,
           cart: checkoutCart,
           user,
           paymentMethod: normalizedMethod,
@@ -1899,6 +1968,7 @@ export function CheckoutModal({
           paymentRail: selectedPaymentRoute.rail,
           providerCode: selectedPaymentRoute.providerCode,
           paymentAccount: normalizedMethod === 'tz_bank' ? cardNumber : (ussdPhone || phone),
+          identity: normalizedMethod === "orbi_wallet" ? orbiIdentity : undefined,
           operation: "paysafe",
           appliedCoupon,
           finalTotal,
@@ -1991,7 +2061,10 @@ export function CheckoutModal({
           ...(data.gatewayResponse || { status: "processing", message: "Payment request accepted." }),
           gatewayResults: data.gatewayResults || [],
           successfulOrders: data.successfulOrders || [],
+          idempotencyKey: data.idempotencyKey || checkoutIdempotencyKey,
+          replayed: Boolean(data.replayed),
         });
+        checkoutIdempotencyRef.current = "";
         setLoadingMsg("");
         setStep(3);
       } else {
@@ -2007,6 +2080,7 @@ export function CheckoutModal({
           paymentCategory: selectedPaymentRoute.category,
           paymentRail: selectedPaymentRoute.rail,
           providerCode: selectedPaymentRoute.providerCode || null,
+          idempotencyKey: checkoutIdempotencyKey,
           retryable: Boolean(data?.retryable || timeoutLike),
         });
         setLoadingMsg("");
@@ -2921,35 +2995,74 @@ export function CheckoutModal({
                   </div>
                 </div>
               ) : (
-                <div>
+                <div className="space-y-3">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {effectivePaymentMethod === 'orbi_wallet' ? (lang === "sw" ? "PaySafe ID au Namba ya Simu" : "PaySafe ID or Account Phone Number") : (lang === "sw" ? "Namba ya Simu au Kumbukumbu" : "Mobile Number or Reference")}
+                    {effectivePaymentMethod === 'orbi_wallet' ? (lang === "sw" ? "ORBI ID, simu au email" : "ORBI ID, phone, or email") : (lang === "sw" ? "Namba ya Simu au Kumbukumbu" : "Mobile Number or Reference")}
                   </label>
-                  <input
-                    type={effectivePaymentMethod === 'orbi_wallet' ? 'text' : 'tel'}
-                    id="tx_ref_input"
-                    name="tx_ref_input"
-                    autoComplete={effectivePaymentMethod === 'orbi_wallet' ? 'off' : 'tel'}
-                    autoCorrect="off"
-                    autoCapitalize="none"
-                    spellCheck="false"
-                    data-form-type="other"
-                    inputMode={effectivePaymentMethod === 'orbi_wallet' ? 'text' : 'numeric'}
-                    placeholder={effectivePaymentMethod === 'orbi_wallet' ? (lang === "sw" ? "Namba au mfano: ORB123" : "Number or e.g. ORB123") : (lang === "sw" ? "Mfano: 0712345678" : "e.g. 0712345678")}
-                    className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:border-amber-500 outline-none"
-                    value={ussdPhone}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (effectivePaymentMethod === 'mno_tz') {
-                        setUssdPhone(val.replace(/\D/g, ''));
-                      } else {
-                        const upperVal = val.toUpperCase();
-                        if (upperVal === '' || upperVal === 'O' || upperVal === 'OR' || upperVal === 'ORB' || upperVal.startsWith('ORB') || /^\d+$/.test(val)) {
-                          setUssdPhone(upperVal.startsWith('O') ? upperVal : val.replace(/\D/g, ''));
+                  <div className="flex gap-2">
+                    <input
+                      type={effectivePaymentMethod === 'orbi_wallet' ? 'text' : 'tel'}
+                      id="tx_ref_input"
+                      name="tx_ref_input"
+                      autoComplete={effectivePaymentMethod === 'orbi_wallet' ? 'off' : 'tel'}
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck="false"
+                      data-form-type="other"
+                      inputMode={effectivePaymentMethod === 'orbi_wallet' ? 'text' : 'numeric'}
+                      placeholder={effectivePaymentMethod === 'orbi_wallet' ? (lang === "sw" ? "Mfano: OB26..., +255..., au email" : "e.g. OB26..., +255..., or email") : (lang === "sw" ? "Mfano: 0712345678" : "e.g. 0712345678")}
+                      className="min-w-0 flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm focus:border-amber-500 outline-none"
+                      value={ussdPhone}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOrbiIdentity(null);
+                        setOrbiIdentityKey("");
+                        setOrbiIdentityError("");
+                        if (effectivePaymentMethod === 'mno_tz') {
+                          setUssdPhone(val.replace(/\D/g, ''));
+                        } else {
+                          setUssdPhone(val);
                         }
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                    {effectivePaymentMethod === 'orbi_wallet' && (
+                      <button
+                        type="button"
+                        onClick={resolveOrbiIdentity}
+                        disabled={orbiIdentityLoading || currentIdentityInput.length < 3}
+                        className="shrink-0 rounded-lg bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {orbiIdentityLoading ? <RefreshCw size={15} className="animate-spin" /> : (lang === "sw" ? "Hakiki" : "Verify")}
+                      </button>
+                    )}
+                  </div>
+                  {effectivePaymentMethod === 'orbi_wallet' && orbiIdentityError && (
+                    <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+                      {orbiIdentityError}
+                    </p>
+                  )}
+                  {effectivePaymentMethod === 'orbi_wallet' && orbiIdentityConfirmed && (
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm">
+                          <CheckCircle2 size={20} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black text-slate-900">
+                            {orbiIdentity.displayName || (lang === "sw" ? "Akaunti ya ORBI" : "ORBI account")}
+                          </p>
+                          <p className="truncate text-xs font-bold text-slate-500">
+                            {[orbiIdentity.customerId, orbiIdentity.phoneHint, orbiIdentity.emailHint].filter(Boolean).join(" • ")}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-slate-600">
+                        {lang === "sw"
+                          ? "Ombi la uthibitisho litatumwa kwenye ORBI App kabla fedha hazijashikiliwa."
+                          : "An approval request will be sent to the ORBI App before funds are held."}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

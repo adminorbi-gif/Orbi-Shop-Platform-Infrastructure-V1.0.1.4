@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { supabase, encrypt } from "../lib/supabase.js";
 import { callOrbiPayGateway, getPayServiceKey } from "../lib/orbiPayGateway.js";
 import { quoteCartDelivery } from "../lib/deliveryQuote.js";
@@ -279,6 +280,81 @@ function roundMoney(value: number) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function sanitizeIdempotencyKey(value: any) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9:_-]/g, "")
+    .slice(0, 96);
+}
+
+function resolveCheckoutIdempotencyKey(req: any) {
+  return sanitizeIdempotencyKey(
+    req.get("idempotency-key") ||
+      req.get("x-idempotency-key") ||
+      req.get("x-orbi-idempotency-key") ||
+      req.body?.idempotencyKey ||
+      req.body?.idempotency_key,
+  );
+}
+
+function checkoutOrderIdFromIdempotencyKey(key: string) {
+  const digest = crypto
+    .createHash("sha256")
+    .update(key)
+    .digest("hex")
+    .slice(0, 10)
+    .toUpperCase();
+  return `ORD-${digest}`;
+}
+
+async function findExistingCheckoutByBaseOrderId(baseOrderId: string) {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id,legacy_id,status,payment_method,payment_method_name,total")
+    .or(`legacy_id.eq.${baseOrderId},legacy_id.like.${baseOrderId}-%`)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  const orders = data || [];
+  if (orders.length === 0) return null;
+
+  const heldStates = ["confirmed", "shipped", "delivered", "customer_confirmed"];
+  const checkoutStatus = orders.every((order: any) =>
+    heldStates.includes(String(order.status).toLowerCase()),
+  )
+    ? "held"
+    : orders.some((order: any) => String(order.status).toLowerCase() === "cancelled")
+      ? "failed"
+      : "processing";
+
+  return {
+    success: true,
+    replayed: true,
+    baseOrderId,
+    successfulOrders: orders.map((order: any) => order.legacy_id || order.id),
+    gatewayResponse: {
+      status: checkoutStatus,
+      rawStatus: "idempotent_replay",
+      message: "Checkout request already exists. Returning the original order references safely.",
+      reference: baseOrderId,
+    },
+    gatewayResults: orders.map((order: any) => {
+      const status = heldStates.includes(String(order.status).toLowerCase())
+        ? "held"
+        : String(order.status).toLowerCase() === "cancelled"
+          ? "failed"
+          : "processing";
+      return {
+        status,
+        reference: order.legacy_id || order.id,
+        amount: order.total || 0,
+        paymentRail: order.payment_method || null,
+        paymentCategory: order.payment_method_name || null,
+      };
+    }),
+  };
+}
+
 function buildSellerAllocation(
   sellerGroups: Record<string, any[]>,
   payableTotalInput: number,
@@ -350,7 +426,7 @@ function buildSellerAllocation(
 
 router.post("/", async (req, res) => {
   try {
-    const { cart, user, paymentMethod, paymentCategory, paymentRail, providerCode, paymentAccount, operation, appliedCoupon, finalTotal, name, phone, address, options, tin, lang, deliveryZone, deliveryZoneId, deliveryFee, deliveryEta, deliveryOrigin, deliveryDestination, applyInsurance } = req.body;
+    const { cart, user, paymentMethod, paymentCategory, paymentRail, providerCode, paymentAccount, operation, appliedCoupon, finalTotal, name, phone, address, options, tin, lang, deliveryZone, deliveryZoneId, deliveryFee, deliveryEta, deliveryOrigin, deliveryDestination, applyInsurance, identity } = req.body;
 
     // Gateway contract validation
     if (!paymentCategory || !paymentRail || !operation) {
@@ -368,6 +444,17 @@ router.post("/", async (req, res) => {
       providerCode,
       paymentAccount,
     });
+    const resolvedIdentity = identity && typeof identity === "object" ? identity : null;
+    const resolvedIdentityId = String(resolvedIdentity?.id || "").trim();
+    if (paymentRoute.paymentRail === "orbi_wallet" && !isValidUUID(resolvedIdentityId)) {
+      return res.status(400).json({
+        success: false,
+        error: "ORBI_IDENTITY_REQUIRED",
+        message: lang === "sw"
+          ? "Thibitisha ORBI ID, simu, au email kabla ya kuendelea na malipo."
+          : "Confirm the ORBI ID, phone, or email before continuing payment.",
+      });
+    }
 
     const gatewayResults: ReturnType<typeof normalizeGatewayOutcome>[] = [];
 
@@ -442,7 +529,19 @@ router.post("/", async (req, res) => {
       }
     }
 
-    const oIdBase = "ORD-" + Math.floor(10000 + Math.random() * 90000);
+    const requestIdempotencyKey = resolveCheckoutIdempotencyKey(req);
+    const oIdBase = requestIdempotencyKey
+      ? checkoutOrderIdFromIdempotencyKey(requestIdempotencyKey)
+      : "ORD-" + Math.floor(10000 + Math.random() * 90000);
+    if (requestIdempotencyKey) {
+      const existingCheckout = await findExistingCheckoutByBaseOrderId(oIdBase);
+      if (existingCheckout) {
+        return res.json({
+          ...existingCheckout,
+          idempotencyKey: requestIdempotencyKey,
+        });
+      }
+    }
     const deliveryFeeAmount = roundMoney(Math.max(0, Number(serverDeliveryQuote?.totalFee ?? deliveryZone?.price ?? deliveryFee ?? 0)));
     const deliveryInsuranceFee = roundMoney(Number(serverDeliveryQuote?.insurance?.fee || serverDeliveryQuote?.costBreakdown?.insuranceFee || 0));
     const deliveryInsuranceCoverage = roundMoney(Number(serverDeliveryQuote?.insurance?.coverage || serverDeliveryQuote?.costBreakdown?.insuranceCoverage || 0));
@@ -506,7 +605,14 @@ router.post("/", async (req, res) => {
     try {
       const result = await callOrbiPayGateway("/v1/paysafe/escrows", {
         method: "POST",
+        idempotencyKey: requestIdempotencyKey || undefined,
         body: {
+          ...(requestIdempotencyKey
+            ? {
+                idempotencyKey: requestIdempotencyKey,
+                idempotency_key: requestIdempotencyKey,
+              }
+            : {}),
           reference: String(oIdBase),
           amount: gatewayChargeTotal,
           currency: "TZS",
@@ -516,11 +622,11 @@ router.post("/", async (req, res) => {
           confirm: true,
           description: "ORBI Shop protected checkout",
           buyer: {
-            type: dbCustomerId ? "user" : "external_customer",
-            userId: dbCustomerId,
-            name,
-            phone,
-            email: user?.email || "",
+            type: resolvedIdentityId ? "user" : dbCustomerId ? "user" : "external_customer",
+            userId: resolvedIdentityId || dbCustomerId,
+            name: resolvedIdentity?.displayName || name,
+            phone: paymentRoute.paymentRail === "orbi_wallet" ? undefined : phone,
+            email: paymentRoute.paymentRail === "orbi_wallet" ? undefined : user?.email || "",
           },
           seller: {
             userId: "orbi-shop-paysafe",
@@ -529,11 +635,21 @@ router.post("/", async (req, res) => {
           settlementSplits,
           metadata: {
             orderId: oIdBase,
+            idempotencyKey: requestIdempotencyKey || undefined,
             checkoutMode: "secure_escrow",
             checkoutType: settlementSplits.length > 1 ? "multi_seller_split" : "single_seller",
             paymentCategory: paymentRoute.paymentCategory,
             paymentRail: paymentRoute.paymentRail,
             providerCode: paymentRoute.providerCode,
+            identity: resolvedIdentityId
+              ? {
+                  id: resolvedIdentityId,
+                  customerId: resolvedIdentity?.customerId || null,
+                  displayName: resolvedIdentity?.displayName || null,
+                  phoneHint: resolvedIdentity?.phoneHint || null,
+                  emailHint: resolvedIdentity?.emailHint || null,
+                }
+              : undefined,
             paymentAccountHint: paymentRoute.paymentAccount ? `${paymentRoute.paymentAccount.slice(0, 3)}***${paymentRoute.paymentAccount.slice(-3)}` : undefined,
             settlementPolicy: "paysafe_hold_required",
             grossCartTotal: checkoutAllocation.grossCartTotal,
@@ -697,6 +813,7 @@ router.post("/", async (req, res) => {
 
     res.json({ 
       success: true, 
+      idempotencyKey: requestIdempotencyKey || null,
       baseOrderId: oIdBase, 
       successfulOrders: oIds,
       gatewayResponse: gatewayResults.length === 1 ? gatewayResults[0] : {
