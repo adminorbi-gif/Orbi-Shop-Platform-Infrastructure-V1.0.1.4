@@ -426,6 +426,61 @@ body {
   .orbi-admin-card {
     min-height: 8.5rem;
   }
+
+  /* Optimize product grid alignment, padding and margins on screens < 420px */
+  .orbi-product-list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)) !important;
+    gap: 5px !important;
+    padding: 2px !important;
+    margin: 0 !important;
+  }
+
+  .orbi-market-product-card {
+    margin: 0 !important;
+    border-radius: 8px !important;
+  }
+
+  .orbi-product-image-stage {
+    padding: 3px !important;
+    border-radius: 8px 8px 0 0 !important;
+  }
+
+  /* Target the info/content area inside the product card (both p-3 and p-3.5) */
+  .orbi-market-product-card > div:last-child {
+    padding: 6px !important;
+    gap: 4px !important;
+  }
+
+  /* Make product title slightly smaller with tight line height */
+  .orbi-product-title {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    min-height: auto !important; /* Allow card heights to balance nicely */
+  }
+
+  /* Scale font-sizes down slightly to avoid line wrapping issues on small screens */
+  .orbi-market-product-card .text-\[17px\] {
+    font-size: 13.5px !important;
+  }
+  .orbi-market-product-card .min-\[370px\]\:text-\[19px\] {
+    font-size: 14px !important;
+  }
+  .orbi-market-product-card .sm\:text-\[22px\] {
+    font-size: 15px !important;
+  }
+  .orbi-market-product-card .md\:text-\[24px\] {
+    font-size: 16px !important;
+  }
+
+  .orbi-market-product-card .text-\[10px\],
+  .orbi-market-product-card .text-\[11px\],
+  .orbi-market-product-card .text-xs {
+    font-size: 9px !important;
+  }
+
+  .orbi-market-product-card .text-\[9px\] {
+    font-size: 8px !important;
+  }
 }
 /* Eliminate native tap overlay and selection issues to feel like standard compiled mobile apps */
 button,
