@@ -249,6 +249,8 @@ function normalizeGatewayOutcome(result: any, fallbackReference: string, route: 
     reference: intent?.reference || coreData?.reference || fallbackReference,
     transactionId: coreData?.transactionId || intent?.coreResult?.transactionId || null,
     challenge: coreData?.challenge || intent?.coreResult?.challenge || null,
+    challengeMode: intent?.challengeMode || coreData?.challengeMode || null,
+    challengeUrl: intent?.challengeUrl || coreData?.challengeUrl || null,
     paymentCategory: route.paymentCategory,
     paymentRail: route.paymentRail,
     providerCode: route.providerCode || null,

@@ -1799,6 +1799,9 @@ export function CheckoutModal({
   const gatewayIsHeld = gatewayStatus === "held";
   const gatewayIsFailed = gatewayStatus === "failed";
   const gatewayNeedsAction = gatewayStatus === "requires_action";
+  const gatewayChallengeUrl = typeof gatewayResponse?.challengeUrl === "string" ? gatewayResponse.challengeUrl : "";
+  const gatewayChallengeMode = String(gatewayResponse?.challengeMode || "").toLowerCase();
+  const gatewayUsesHostedChallenge = gatewayNeedsAction && gatewayChallengeUrl && gatewayChallengeMode !== "in_app_required";
   const gatewayIsProcessing = !gatewayIsHeld && !gatewayIsFailed && !gatewayNeedsAction;
 
   useEffect(() => {
@@ -3175,13 +3178,27 @@ export function CheckoutModal({
                         ? "Asante. Oda yako imepokelewa na unaweza kuifuatilia kwenye akaunti yako."
                         : "Thank you. Your order has been received and can be tracked from your account.")
                       : gatewayNeedsAction
-                        ? (lang === "sw"
-                          ? "Tafadhali kamilisha uthibitisho wa malipo ili oda iendelee."
-                          : "Please complete payment approval so your order can continue.")
+                        ? gatewayUsesHostedChallenge
+                          ? (lang === "sw"
+                            ? "Fungua ukurasa salama wa ORBI ili kuthibitisha malipo haya. Usirudie checkout wakati uthibitisho unaendelea."
+                            : "Open the secure ORBI verification page to approve this payment. Do not repeat checkout while approval is pending.")
+                          : (lang === "sw"
+                            ? "Tafadhali kamilisha uthibitisho ndani ya app yako ya ORBI ili oda iendelee."
+                            : "Please complete approval inside your ORBI app so your order can continue.")
                         : (lang === "sw"
                           ? "Ombi la malipo linaendelea kuchakatwa. Tafadhali subiri au fuatilia oda yako baada ya muda mfupi."
                           : "Your payment is still processing. Please wait or track your order shortly.")}
                   </p>
+                  {gatewayUsesHostedChallenge && (
+                    <button
+                      type="button"
+                      onClick={() => window.open(gatewayChallengeUrl, "_blank", "noopener,noreferrer")}
+                      className="relative z-10 mt-3 w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl shadow-slate-900/20 transition hover:bg-slate-800 flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink size={16} />
+                      {lang === "sw" ? "Fungua Uthibitisho wa ORBI" : "Open ORBI Verification"}
+                    </button>
+                  )}
                 </div>
 
                 {pointsToRedeem > 0 && !gatewayIsFailed && (
