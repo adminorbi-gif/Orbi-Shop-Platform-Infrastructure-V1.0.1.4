@@ -1805,6 +1805,50 @@ export function CheckoutModal({
   const gatewayIsProcessing = !gatewayIsHeld && !gatewayIsFailed && !gatewayNeedsAction;
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("orbi_payment_status");
+    if (!paymentStatus) return;
+    const orderRef = params.get("order_ref") || params.get("reference") || "";
+    const paymentIntentId = params.get("payment_intent_id") || "";
+    const approved = paymentStatus === "approved" || paymentStatus === "held" || paymentStatus === "completed";
+    const declined = paymentStatus === "declined" || paymentStatus === "rejected" || paymentStatus === "cancelled";
+    setLastCreatedOrderId(orderRef);
+    setGatewayResponse({
+      status: approved ? "held" : declined ? "failed" : "processing",
+      rawStatus: paymentStatus,
+      message: approved
+        ? (lang === "sw"
+          ? "Malipo yamethibitishwa na fedha zimeshikiliwa salama kwenye ORBI PaySafe."
+          : "Payment approved and funds are safely held in ORBI PaySafe.")
+        : declined
+          ? (lang === "sw"
+            ? "Uthibitisho wa malipo umekataliwa. Oda haijakamilishwa."
+            : "Payment approval was declined. The order was not completed.")
+          : (lang === "sw"
+            ? "Tunathibitisha hali ya malipo yako."
+            : "We are verifying your payment status."),
+      paymentIntentId,
+      reference: orderRef,
+    });
+    setLoadingMsg("");
+    setStep(3);
+    showAlert(
+      approved
+        ? (lang === "sw" ? "Malipo yamefanikiwa!" : "Payment successful!")
+        : declined
+          ? (lang === "sw" ? "Malipo yamekataliwa." : "Payment declined.")
+          : (lang === "sw" ? "Tunathibitisha malipo..." : "Verifying payment..."),
+      approved ? "success" : declined ? "warning" : "info",
+    );
+    params.delete("orbi_payment_status");
+    params.delete("payment_intent_id");
+    params.delete("order_ref");
+    params.delete("reference");
+    const nextQuery = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`);
+  }, [lang, showAlert]);
+
+  useEffect(() => {
     Promise.all([
       db.getInvoiceSettings(),
       db.getDeliveryZones().catch(() => DEFAULT_DELIVERY_ZONES),
@@ -2005,6 +2049,7 @@ export function CheckoutModal({
           options,
           tin: customerTin,
           lang,
+          returnUrl: `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`,
         }),
       });
       
@@ -2052,23 +2097,45 @@ export function CheckoutModal({
           console.warn("Analytics checkout completed log failed", e),
         );
 
-        showAlert(
-          lang === "sw"
-            ? "Agizo lako limethibitishwa!"
-            : "Your order has been confirmed!",
-          "success",
-        );
-
         setLastCreatedOrderId(data.baseOrderId);
-        setGatewayResponse({
+        const nextGatewayResponse = {
           ...(data.gatewayResponse || { status: "processing", message: "Payment request accepted." }),
           gatewayResults: data.gatewayResults || [],
           successfulOrders: data.successfulOrders || [],
           idempotencyKey: data.idempotencyKey || checkoutIdempotencyKey,
           replayed: Boolean(data.replayed),
-        });
+        };
+        setGatewayResponse(nextGatewayResponse);
+        const nextGatewayStatus = String(nextGatewayResponse.status || "").toLowerCase();
+        const nextChallengeUrl = typeof nextGatewayResponse.challengeUrl === "string" ? nextGatewayResponse.challengeUrl : "";
+        const nextChallengeMode = String(nextGatewayResponse.challengeMode || "").toLowerCase();
         checkoutIdempotencyRef.current = "";
         setLoadingMsg("");
+        if (nextGatewayStatus === "requires_action" && nextChallengeUrl && nextChallengeMode !== "in_app_required") {
+          localStorage.setItem("orbi_checkout_pending", JSON.stringify({
+            orderRef: data.baseOrderId,
+            paymentIntentId: nextGatewayResponse.paymentIntentId || null,
+            reference: nextGatewayResponse.reference || data.baseOrderId,
+            idempotencyKey: nextGatewayResponse.idempotencyKey || checkoutIdempotencyKey,
+            createdAt: new Date().toISOString(),
+          }));
+          showAlert(
+            lang === "sw"
+              ? "Tunakupeleka kwenye uthibitisho salama wa ORBI PaySafe..."
+              : "Redirecting you to secure ORBI PaySafe verification...",
+            "info",
+          );
+          window.location.assign(nextChallengeUrl);
+          return;
+        }
+        showAlert(
+          nextGatewayStatus === "held"
+            ? (lang === "sw" ? "Agizo lako limethibitishwa!" : "Your order has been confirmed!")
+            : nextGatewayStatus === "requires_action"
+              ? (lang === "sw" ? "Kamilisha uthibitisho wa malipo." : "Complete payment approval.")
+              : (lang === "sw" ? "Ombi la malipo limepokelewa." : "Payment request received."),
+          nextGatewayStatus === "held" ? "success" : "info",
+        );
         setStep(3);
       } else {
         const timeoutLike = resp.status === 504 || data?.code === "ORBI_PAY_GATEWAY_TIMEOUT";

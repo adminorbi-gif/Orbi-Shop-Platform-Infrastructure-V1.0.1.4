@@ -428,7 +428,8 @@ function buildSellerAllocation(
 
 router.post("/", async (req, res) => {
   try {
-    const { cart, user, paymentMethod, paymentCategory, paymentRail, providerCode, paymentAccount, operation, appliedCoupon, finalTotal, name, phone, address, options, tin, lang, deliveryZone, deliveryZoneId, deliveryFee, deliveryEta, deliveryOrigin, deliveryDestination, applyInsurance, identity } = req.body;
+    const { cart, user, paymentMethod, paymentCategory, paymentRail, providerCode, paymentAccount, operation, appliedCoupon, finalTotal, name, phone, address, options, tin, lang, deliveryZone, deliveryZoneId, deliveryFee, deliveryEta, deliveryOrigin, deliveryDestination, applyInsurance, identity, returnUrl } = req.body;
+    const checkoutReturnUrl = String(returnUrl || req.get("origin") || req.get("referer") || "").trim();
 
     // Gateway contract validation
     if (!paymentCategory || !paymentRail || !operation) {
@@ -623,6 +624,7 @@ router.post("/", async (req, res) => {
           providerCode: paymentRoute.providerCode,
           confirm: true,
           description: "ORBI Shop protected checkout",
+          returnUrl: checkoutReturnUrl || undefined,
           buyer: {
             type: resolvedIdentityId ? "user" : dbCustomerId ? "user" : "external_customer",
             userId: resolvedIdentityId || dbCustomerId,
@@ -638,6 +640,7 @@ router.post("/", async (req, res) => {
           metadata: {
             orderId: oIdBase,
             idempotencyKey: requestIdempotencyKey || undefined,
+            returnUrl: checkoutReturnUrl || undefined,
             checkoutMode: "secure_escrow",
             checkoutType: settlementSplits.length > 1 ? "multi_seller_split" : "single_seller",
             paymentCategory: paymentRoute.paymentCategory,
