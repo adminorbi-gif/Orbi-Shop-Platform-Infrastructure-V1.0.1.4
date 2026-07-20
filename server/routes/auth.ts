@@ -1,8 +1,83 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { supabase, getSupabase, getAdminSupabase, encrypt } from '../lib/supabase.js';
+import { callOrbiPayGateway } from '../lib/orbiPayGateway.js';
 
 const router = Router();
+
+function normalizeSettlementMethod(value: unknown) {
+  const method = String(value || '').trim().toLowerCase();
+  if (method === 'orbi') return 'orbi';
+  if (method === 'card') return 'card';
+  if (method === 'mobile') return 'mobile_money';
+  return 'bank_account';
+}
+
+function maskSettlementAccount(value: unknown) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const compact = raw.replace(/\s+/g, '');
+  if (compact.length <= 6) return `${compact.slice(0, 2)}***`;
+  return `${compact.slice(0, 3)}***${compact.slice(-3)}`;
+}
+
+async function createSellerPaymentProfile(input: {
+  userId: string;
+  email: string;
+  phone?: string;
+  sellerName: string;
+  accountIdentifier: string;
+  role: string;
+  settlementField: 'bankAccount' | 'companyBankAccount';
+}) {
+  const idempotencyKey = `orbishop:seller-payment-profile:${input.userId}:${input.settlementField}`;
+  const result = await callOrbiPayGateway('/v1/payment-profiles', {
+    method: 'POST',
+    idempotencyKey,
+    body: {
+      idempotencyKey,
+      userId: input.userId,
+      email: input.email,
+      phone: input.phone,
+      externalCustomerId: `orbishop:seller:${input.userId}`,
+      scopes: [
+        'payment_profile:read',
+        'balance:read',
+        'payments:create',
+        'escrow:create',
+        'withdrawal:request',
+      ],
+      consent: {
+        accepted: true,
+        source: 'orbi-shop-seller-registration',
+        accountIdentifier: input.accountIdentifier,
+        acceptedAt: new Date().toISOString(),
+      },
+      metadata: {
+        source: 'orbi-shop',
+        profileType: 'seller_settlement',
+        sellerName: input.sellerName,
+        sellerRole: input.role,
+        settlementField: input.settlementField,
+      },
+    },
+  });
+
+  const profile = result?.data || result?.paymentProfile || result?.profile || result;
+  const profileId = String(profile?.profileId || profile?.paymentProfileId || profile?.id || '').trim();
+  if (!profileId) {
+    const error = new Error('ORBI_PAYMENT_PROFILE_NOT_CREATED');
+    (error as any).status = 502;
+    (error as any).details = result;
+    throw error;
+  }
+
+  return {
+    profileId,
+    status: String(profile?.status || 'active'),
+    scopes: Array.isArray(profile?.scopes) ? profile.scopes : [],
+  };
+}
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -143,6 +218,7 @@ router.post('/signup', async (req, res) => {
     harvestSchedule,
     certifications,
     bankAccount,
+    bankAccountMethod,
 
     // Industrial attributes
     legalName,
@@ -157,6 +233,7 @@ router.post('/signup', async (req, res) => {
     procurementPhone,
     paymentTerms,
     companyBankAccount,
+    companyBankAccountMethod,
 
     // Wakala attributes
     agencyName,
@@ -219,16 +296,34 @@ router.post('/signup', async (req, res) => {
 
       // Create Role-Specific Profiles in parallel or sequentially
       if (role === 'PRODUCER') {
+        const settlementMethod = normalizeSettlementMethod(bankAccountMethod);
+        const paymentProfile = settlementMethod === 'orbi'
+          ? await createSellerPaymentProfile({
+              userId,
+              email: email.toLowerCase().trim(),
+              phone,
+              sellerName: farmName || full_name || email.split('@')[0],
+              accountIdentifier: bankAccount,
+              role: 'PRODUCER',
+              settlementField: 'bankAccount',
+            })
+          : null;
         const sellerPayload = {
           id: userId,
           name: farmName || full_name,
-          description: `Producer: ${productionCategory || 'General'}. Capacity: ${capacity || 0} ${capacityUnit || 'KG/Month'}. Primary Products: ${Array.isArray(primaryProducts) ? primaryProducts.join(', ') : (primaryProducts || '')}. Harvest Schedule: ${harvestSchedule || 'N/A'}. Certifications: ${Array.isArray(certifications) ? certifications.join(', ') : (certifications || '')}. Bank Account: ${bankAccount || 'N/A'}`,
+          description: `Producer: ${productionCategory || 'General'}. Capacity: ${capacity || 0} ${capacityUnit || 'KG/Month'}. Primary Products: ${Array.isArray(primaryProducts) ? primaryProducts.join(', ') : (primaryProducts || '')}. Harvest Schedule: ${harvestSchedule || 'N/A'}. Certifications: ${Array.isArray(certifications) ? certifications.join(', ') : (certifications || '')}. Settlement: ${settlementMethod}. Account: ${maskSettlementAccount(bankAccount) || 'N/A'}`,
           email: email.toLowerCase().trim(),
           status: 'active',
           pickup_address: location || '',
           pickup_lat: gpsLat ? Number(gpsLat) : null,
           pickup_lng: gpsLng ? Number(gpsLng) : null,
           is_pro: false,
+          payment_profile_id: paymentProfile?.profileId || null,
+          payment_profile_status: paymentProfile?.status || null,
+          payment_profile_scopes: paymentProfile?.scopes || [],
+          settlement_method: settlementMethod,
+          settlement_account_hint: maskSettlementAccount(bankAccount),
+          settlement_verified_at: paymentProfile ? new Date().toISOString() : null,
           created_at: new Date().toISOString()
         };
 
@@ -238,17 +333,36 @@ router.post('/signup', async (req, res) => {
 
         if (selError) {
           console.error('[AUTH PRODUCER REGISTRATION ERROR]', selError.message || selError);
+          throw selError;
         }
       } else if (role === 'INDUSTRIAL') {
+        const settlementMethod = normalizeSettlementMethod(companyBankAccountMethod);
+        const paymentProfile = settlementMethod === 'orbi'
+          ? await createSellerPaymentProfile({
+              userId,
+              email: email.toLowerCase().trim(),
+              phone,
+              sellerName: legalName || tradingName || full_name || email.split('@')[0],
+              accountIdentifier: companyBankAccount,
+              role: 'INDUSTRIAL',
+              settlementField: 'companyBankAccount',
+            })
+          : null;
         const sellerPayload = {
           id: userId,
           name: legalName || tradingName || full_name,
-          description: `Industrial B2B. Sector: ${industrySector || 'Other'}. BRELA: ${registrationNo || 'N/A'}. VRN: ${vrnNumber || 'N/A'}. Procurement Contact: ${procurementContact || 'N/A'}. Terms: ${paymentTerms || 'Cash'}. Bank: ${companyBankAccount || 'N/A'}`,
+          description: `Industrial B2B. Sector: ${industrySector || 'Other'}. BRELA: ${registrationNo || 'N/A'}. VRN: ${vrnNumber || 'N/A'}. Procurement Contact: ${procurementContact || 'N/A'}. Terms: ${paymentTerms || 'Cash'}. Settlement: ${settlementMethod}. Account: ${maskSettlementAccount(companyBankAccount) || 'N/A'}`,
           email: email.toLowerCase().trim(),
           status: 'active',
           tin: tinNumber || '',
           pickup_address: physicalAddress || billingAddress || '',
           is_pro: true,
+          payment_profile_id: paymentProfile?.profileId || null,
+          payment_profile_status: paymentProfile?.status || null,
+          payment_profile_scopes: paymentProfile?.scopes || [],
+          settlement_method: settlementMethod,
+          settlement_account_hint: maskSettlementAccount(companyBankAccount),
+          settlement_verified_at: paymentProfile ? new Date().toISOString() : null,
           created_at: new Date().toISOString()
         };
 
@@ -258,6 +372,7 @@ router.post('/signup', async (req, res) => {
 
         if (selError) {
           console.error('[AUTH INDUSTRIAL REGISTRATION ERROR]', selError.message || selError);
+          throw selError;
         }
       } else if (role === 'WAKALA') {
         const brokerPayload = {

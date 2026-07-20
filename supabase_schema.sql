@@ -781,6 +781,12 @@ CREATE TABLE IF NOT EXISTS public.sellers (
   invoice_phone TEXT,
   invoice_email TEXT,
   invoice_terms TEXT,
+  payment_profile_id TEXT,
+  payment_profile_status TEXT,
+  payment_profile_scopes JSONB DEFAULT '[]'::jsonb,
+  settlement_method TEXT,
+  settlement_account_hint TEXT,
+  settlement_verified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   
   legacy_id TEXT
@@ -795,6 +801,14 @@ ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS pickup_zone_id TEXT;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS security_flags INTEGER DEFAULT 0;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS block_reason TEXT;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS last_security_flag_at TIMESTAMPTZ;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_id TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_status TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_scopes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_method TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_account_hint TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_verified_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_sellers_payment_profile_id ON public.sellers(payment_profile_id) WHERE payment_profile_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sellers_settlement_method ON public.sellers(settlement_method) WHERE settlement_method IS NOT NULL;
 
 -- RLS for Sellers
 ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
@@ -1641,6 +1655,14 @@ ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS pickup_place_id TEXT;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS pickup_lat NUMERIC(10,7);
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS pickup_lng NUMERIC(10,7);
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS pickup_zone_id TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_id TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_status TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_scopes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_method TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_account_hint TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_verified_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_sellers_payment_profile_id ON public.sellers(payment_profile_id) WHERE payment_profile_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sellers_settlement_method ON public.sellers(settlement_method) WHERE settlement_method IS NOT NULL;
 
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS seller_pickup_address TEXT;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS seller_pickup_place_id TEXT;
@@ -1698,6 +1720,14 @@ ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS security_flags INTEGER DEF
 ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS block_reason TEXT;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS security_flags INTEGER DEFAULT 0;
 ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS block_reason TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_id TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_status TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS payment_profile_scopes JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_method TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_account_hint TEXT;
+ALTER TABLE public.sellers ADD COLUMN IF NOT EXISTS settlement_verified_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_sellers_payment_profile_id ON public.sellers(payment_profile_id) WHERE payment_profile_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sellers_settlement_method ON public.sellers(settlement_method) WHERE settlement_method IS NOT NULL;
 
 -- Ensure frozen status is available for customers (already is for sellers)
 ALTER TABLE public.customers DROP CONSTRAINT IF EXISTS customers_status_check;

@@ -65,6 +65,7 @@ const ProducerSchema = z.object({
   harvestSchedule: z.string().optional(),
   certifications: z.string().optional(),
   bankAccount: z.string().min(5, { message: 'Weka namba ya akaunti ya benki / Bank account is required' }),
+  bankAccountMethod: z.enum(['Orbi', 'Bank Account', 'Card', 'Mobile']).optional(),
 });
 
 // Industrial specific fields
@@ -81,6 +82,7 @@ const IndustrialSchema = z.object({
   procurementPhone: z.string().min(10, { message: 'Weka namba sahihi ya simu / Enter a valid phone number' }),
   paymentTerms: z.string().min(1, { message: 'Chagua masharti ya malipo / Please select payment terms' }),
   companyBankAccount: z.string().min(5, { message: 'Weka namba ya akaunti ya benki / Company bank account is required' }),
+  companyBankAccountMethod: z.enum(['Orbi', 'Bank Account', 'Card', 'Mobile']).optional(),
 });
 
 // Wakala specific fields
@@ -164,6 +166,8 @@ export const BusinessRegistrationForm: React.FC<BusinessRegistrationFormProps> =
       productionCategory: 'Agriculture (Crops)',
       industrySector: 'FMCG',
       paymentTerms: 'Cash',
+      bankAccountMethod: 'Bank Account',
+      companyBankAccountMethod: 'Bank Account',
       commissionRate: 3.0,
       yearsExperience: 1,
     },
@@ -669,6 +673,7 @@ export const BusinessRegistrationForm: React.FC<BusinessRegistrationFormProps> =
                     <SettlementAccountField
                       label={t('Akaunti ya Benki (Kwa Malipo)', 'Settlement Bank Account')}
                       fieldName="bankAccount"
+                      methodFieldName="bankAccountMethod"
                       register={register}
                       setValue={setValue}
                       errors={errors}
@@ -854,6 +859,7 @@ export const BusinessRegistrationForm: React.FC<BusinessRegistrationFormProps> =
                     <SettlementAccountField
                       label={t('Akaunti ya Benki ya Kampuni', 'Company Settlement Bank Account')}
                       fieldName="companyBankAccount"
+                      methodFieldName="companyBankAccountMethod"
                       register={register}
                       setValue={setValue}
                       errors={errors}
@@ -1364,6 +1370,7 @@ const LocationInputWithAutocomplete: React.FC<LocationInputWithAutocompleteProps
 interface SettlementAccountFieldProps {
   label: string;
   fieldName: 'bankAccount' | 'companyBankAccount';
+  methodFieldName: 'bankAccountMethod' | 'companyBankAccountMethod';
   register: any;
   setValue: any;
   errors: any;
@@ -1373,6 +1380,7 @@ interface SettlementAccountFieldProps {
 const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
   label,
   fieldName,
+  methodFieldName,
   register,
   setValue,
   errors,
@@ -1426,6 +1434,10 @@ const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
 
   const currentMethodObj = methods.find((m) => m.id === method) || methods[1];
 
+  useEffect(() => {
+    setValue(methodFieldName, method, { shouldValidate: false });
+  }, [method, methodFieldName, setValue]);
+
   const getInstructions = () => {
     switch (method) {
       case 'Orbi':
@@ -1466,6 +1478,7 @@ const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input type="hidden" {...register(methodFieldName)} />
         {/* Modern Method Dropdown Selector */}
         <div className="relative" ref={dropdownRef}>
           <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2">
@@ -1526,6 +1539,7 @@ const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
                     onClick={() => {
                       setMethod(m.id);
                       setIsOpen(false);
+                      setValue(methodFieldName, m.id, { shouldValidate: false });
                       setValue(fieldName, '', { shouldValidate: false });
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition hover:bg-slate-50 ${
