@@ -426,9 +426,9 @@ export const OrderItemRow = React.memo(function OrderItemRow({
         </div>
       </td>
       <td className="p-4">
-        <div className="font-medium text-sm">{order.customerDetails.name}</div>
+        <div className="font-medium text-sm">{order.customerDetails?.name || "-"}</div>
         <div className="text-xs text-slate-500">
-          {order.customerDetails.phone}
+          {order.customerDetails?.phone || "-"}
         </div>
       </td>
       <td className="p-4">
@@ -3739,7 +3739,7 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
                                 {o.id}
                               </td>
                               <td className="py-3 font-bold text-slate-800">
-                                {o.customerDetails.name}
+                                {o.customerDetails?.name || "-"}
                               </td>
                               <td className="py-3 text-slate-500">
                                 {new Date(o.date).toLocaleDateString("sw-TZ")}
@@ -3951,7 +3951,14 @@ function AdminDashboard({ onLogout }: { onLogout: () => void }) {
             )}
             {tab === "notifications" && (
               <div className="flex-1">
-                <StockNotificationsAdmin />
+                <StockNotificationsAdmin
+                  messages={messages}
+                  orders={orders}
+                  setTab={setTab}
+                  sellers={sellers}
+                  products={products}
+                  lang={lang}
+                />
               </div>
             )}
             {tab === "live_chat" && (

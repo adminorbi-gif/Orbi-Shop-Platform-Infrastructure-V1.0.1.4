@@ -2284,67 +2284,535 @@ export function StatCard({
 }
 
 // ---------------- STOCK NOTIFICATIONS ADMIN ---------------- //
-export function StockNotificationsAdmin() {
-  const [notifications, setNotifications] = useState<any[]>([]);
+export function StockNotificationsAdmin({
+  messages = [],
+  orders = [],
+  setTab,
+  sellers = [],
+  products = [],
+  lang = "sw",
+}: {
+  messages?: Message[];
+  orders?: Order[];
+  setTab?: (tab: string) => void;
+  sellers?: SellerProfile[];
+  products?: Product[];
+  lang?: string;
+}) {
+  const [stockNotifications, setStockNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeSubTab, setActiveSubTab] = useState<"all" | "orders" | "messages" | "stock">("all");
 
   useEffect(() => {
     db.getStockNotifications().then((data) => {
-      setNotifications(data);
+      setStockNotifications(Array.isArray(data) ? data : []);
       setLoading(false);
     });
   }, []);
 
   const markNotified = async (id: string) => {
     await db.markStockNotificationAsNotified(id);
-    setNotifications((prev) =>
+    setStockNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, notified: true } : n)),
     );
   };
 
   if (loading) return <LoadingOverlay />;
 
+  const unreadMsgs = messages.filter((m) => !m.isRead);
+  const pendingOrders = orders.filter((o) => o.status === "pending");
+  const activeStock = stockNotifications.filter((n) => !n.notified);
+
+  const totalCount = unreadMsgs.length + pendingOrders.length + activeStock.length;
+
+  const txt = {
+    title: lang === "sw" ? "Kituo cha Taarifa na Majukumu" : "Notifications & Action Center",
+    description: lang === "sw" ? "Kagua na ushughulikie oda mpya, meseji za wateja na taarifa za akiba hapa." : "Review and take actions on orders, customer inquiries, and stock alert notifications.",
+    unreadMsg: lang === "sw" ? "Meseji Hazijasomwa" : "Unread Messages",
+    pendingOrders: lang === "sw" ? "Oda Zinazosubiri" : "Pending Orders",
+    stockAlerts: lang === "sw" ? "Taarifa za Akiba" : "Stock Alerts",
+    allAlerts: lang === "sw" ? "Mambo ya Kufanyia Kazi" : "All Action Items",
+    emptyAll: lang === "sw" ? "Safi kabisa! Huna taarifa yoyote inayohitaji kufanyiwa kazi kwa sasa." : "Perfect! You have no notifications or action items requiring attention.",
+    emptyOrders: lang === "sw" ? "Hakuna oda zinazosubiri kwa sasa." : "No pending orders at the moment.",
+    emptyMessages: lang === "sw" ? "Hakuna ujumbe mpya usiosomwa." : "No unread messages found.",
+    emptyStock: lang === "sw" ? "Hakuna taarifa za bidhaa zilizoisha." : "No low stock alerts available.",
+    viewOrder: lang === "sw" ? "Shughulikia Oda" : "Process Order",
+    replyMessage: lang === "sw" ? "Jibu Ujumbe" : "Reply Message",
+    markNotifiedText: lang === "sw" ? "Weka Alama Imeshughulikiwa" : "Mark as Resolved",
+    status: lang === "sw" ? "Hali" : "Status",
+    action: lang === "sw" ? "Kitendo" : "Action",
+    customer: lang === "sw" ? "Mteja" : "Customer",
+    phone: lang === "sw" ? "Simu" : "Phone",
+    totalPrice: lang === "sw" ? "Jumla ya Malipo" : "Total Amount",
+    date: lang === "sw" ? "Tarehe" : "Date",
+    viewAll: lang === "sw" ? "Zote" : "All",
+    product: lang === "sw" ? "Bidhaa" : "Product",
+    resolved: lang === "sw" ? "Imekamilika" : "Resolved",
+    pending: lang === "sw" ? "Inasubiri" : "Pending",
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "-";
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString(lang === "sw" ? "sw-TZ" : "en-US", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "-";
+    }
+  };
+
   return (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200">
-      <h2 className="text-xl font-bold mb-4">Stock Notifications</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-slate-200">
-              <th className="p-3">Product ID</th>
-              <th className="p-3">Email</th>
-              <th className="p-3">Phone</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {notifications.map((n) => (
-              <tr key={n.id} className="border-b border-slate-100">
-                <td className="p-3 font-mono">{n.productId}</td>
-                <td className="p-3">{n.email}</td>
-                <td className="p-3">{n.phone}</td>
-                <td className="p-3">
-                  {n.notified ? (
-                    <span className="text-green-600 font-bold">Notified</span>
-                  ) : (
-                    <span className="text-orange-600 font-bold">Pending</span>
-                  )}
-                </td>
-                <td className="p-3">
-                  {!n.notified && (
-                    <button
-                      onClick={() => markNotified(n.id)}
-                      className="text-blue-600 font-bold hover:underline"
-                    >
-                      Mark as Notified
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-6">
+      {/* Upper header section */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+            <Bell className="text-blue-600 animate-pulse" size={24} />
+            {txt.title}
+          </h2>
+          <p className="text-slate-600 text-sm mt-1">{txt.description}</p>
+        </div>
+        {totalCount > 0 && (
+          <span className="bg-red-500 text-white font-extrabold px-4 py-2 rounded-full text-xs shadow-md animate-bounce">
+            {totalCount} {lang === "sw" ? "Zinahitaji Hatua" : "Action Required"}
+          </span>
+        )}
+      </div>
+
+      {/* Metrics bento-style cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Metric Card */}
+        <button
+          onClick={() => setActiveSubTab("all")}
+          className={`text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+            activeSubTab === "all"
+              ? "bg-slate-900 text-white border-slate-900 shadow-lg scale-[1.02]"
+              : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className={`p-2.5 rounded-xl ${activeSubTab === "all" ? "bg-white/10" : "bg-slate-100"}`}>
+              <Activity size={20} className={activeSubTab === "all" ? "text-white" : "text-slate-700"} />
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeSubTab === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>
+              {txt.viewAll}
+            </span>
+          </div>
+          <div className="mt-4">
+            <div className="text-3xl font-black tracking-tight">{totalCount}</div>
+            <div className={`text-xs font-medium mt-1 ${activeSubTab === "all" ? "text-slate-300" : "text-slate-500"}`}>
+              {txt.allAlerts}
+            </div>
+          </div>
+        </button>
+
+        {/* Pending Orders Card */}
+        <button
+          onClick={() => setActiveSubTab("orders")}
+          className={`text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+            activeSubTab === "orders"
+              ? "bg-amber-500 text-white border-amber-500 shadow-lg scale-[1.02]"
+              : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className={`p-2.5 rounded-xl ${activeSubTab === "orders" ? "bg-white/20" : "bg-amber-50"}`}>
+              <ShoppingCart size={20} className={activeSubTab === "orders" ? "text-white" : "text-amber-600"} />
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeSubTab === "orders" ? "bg-white/25 text-white" : "bg-amber-50 text-amber-700"}`}>
+              {pendingOrders.length}
+            </span>
+          </div>
+          <div className="mt-4">
+            <div className="text-3xl font-black tracking-tight">{pendingOrders.length}</div>
+            <div className={`text-xs font-medium mt-1 ${activeSubTab === "orders" ? "text-amber-100" : "text-slate-500"}`}>
+              {txt.pendingOrders}
+            </div>
+          </div>
+        </button>
+
+        {/* Unread Messages Card */}
+        <button
+          onClick={() => setActiveSubTab("messages")}
+          className={`text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+            activeSubTab === "messages"
+              ? "bg-rose-500 text-white border-rose-500 shadow-lg scale-[1.02]"
+              : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className={`p-2.5 rounded-xl ${activeSubTab === "messages" ? "bg-white/20" : "bg-rose-50"}`}>
+              <MessageSquare size={20} className={activeSubTab === "messages" ? "text-white" : "text-rose-600"} />
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeSubTab === "messages" ? "bg-white/25 text-white" : "bg-rose-50 text-rose-700"}`}>
+              {unreadMsgs.length}
+            </span>
+          </div>
+          <div className="mt-4">
+            <div className="text-3xl font-black tracking-tight">{unreadMsgs.length}</div>
+            <div className={`text-xs font-medium mt-1 ${activeSubTab === "messages" ? "text-rose-100" : "text-slate-500"}`}>
+              {txt.unreadMsg}
+            </div>
+          </div>
+        </button>
+
+        {/* Stock Notifications Card */}
+        <button
+          onClick={() => setActiveSubTab("stock")}
+          className={`text-left p-5 rounded-2xl border transition-all duration-200 cursor-pointer ${
+            activeSubTab === "stock"
+              ? "bg-blue-600 text-white border-blue-600 shadow-lg scale-[1.02]"
+              : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className={`p-2.5 rounded-xl ${activeSubTab === "stock" ? "bg-white/20" : "bg-blue-50"}`}>
+              <Package size={20} className={activeSubTab === "stock" ? "text-white" : "text-blue-600"} />
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeSubTab === "stock" ? "bg-white/25 text-white" : "bg-blue-50 text-blue-700"}`}>
+              {activeStock.length}
+            </span>
+          </div>
+          <div className="mt-4">
+            <div className="text-3xl font-black tracking-tight">{activeStock.length}</div>
+            <div className={`text-xs font-medium mt-1 ${activeSubTab === "stock" ? "text-blue-100" : "text-slate-500"}`}>
+              {txt.stockAlerts}
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Actual Notifications List Section */}
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
+        {/* Sub-tab selection row */}
+        <div className="flex border-b border-slate-200 px-6 pt-4 bg-slate-50/50">
+          <button
+            onClick={() => setActiveSubTab("all")}
+            className={`pb-4 px-4 font-bold text-sm transition-all relative shrink-0 ${
+              activeSubTab === "all" ? "text-slate-900 border-b-2 border-slate-900" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {lang === "sw" ? "Mambo Yote" : "All Tasks"} ({totalCount})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("orders")}
+            className={`pb-4 px-4 font-bold text-sm transition-all relative shrink-0 ${
+              activeSubTab === "orders" ? "text-amber-600 border-b-2 border-amber-500" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {txt.pendingOrders} ({pendingOrders.length})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("messages")}
+            className={`pb-4 px-4 font-bold text-sm transition-all relative shrink-0 ${
+              activeSubTab === "messages" ? "text-rose-600 border-b-2 border-rose-500" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {txt.unreadMsg} ({unreadMsgs.length})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("stock")}
+            className={`pb-4 px-4 font-bold text-sm transition-all relative shrink-0 ${
+              activeSubTab === "stock" ? "text-blue-600 border-b-2 border-blue-500" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {txt.stockAlerts} ({activeStock.length})
+          </button>
+        </div>
+
+        {/* List render area */}
+        <div className="p-6">
+          {/* 1. All Items view (aggregated feed) */}
+          {activeSubTab === "all" && (
+            <div className="space-y-4">
+              {pendingOrders.length === 0 && unreadMsgs.length === 0 && activeStock.length === 0 ? (
+                <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mb-4 border border-emerald-100">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h3 className="text-slate-800 font-bold text-lg">{lang === "sw" ? "Kazi Zote Zimekamilika!" : "Everything's Done!"}</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mt-1">{txt.emptyAll}</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {/* Aggregated list of items */}
+                  {pendingOrders.map((o) => (
+                    <div key={o.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 px-3 rounded-2xl transition">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-xl shrink-0 mt-0.5">
+                          <ShoppingCart size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">
+                            {lang === "sw" ? `Oda mpya inayosubiri #${o.id.substring(0, 8)}` : `New Pending Order #${o.id.substring(0, 8)}`}
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {txt.customer}: <span className="font-semibold text-slate-700">{o.customerDetails?.name || "-"}</span> ({o.customerDetails?.phone || "-"})
+                          </p>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                            <span className="flex items-center gap-1 shrink-0">
+                              <Clock size={11} />
+                              {formatDate(o.date)}
+                            </span>
+                            <span className="h-1 w-1 bg-slate-300 rounded-full shrink-0"></span>
+                            <span className="font-semibold text-amber-700 shrink-0">
+                              {formatCurrency(o.total)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setTab && setTab("orders")}
+                        className="w-full sm:w-auto px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-extrabold hover:bg-amber-600 transition flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <ShoppingCart size={13} />
+                        {txt.viewOrder}
+                      </button>
+                    </div>
+                  ))}
+
+                  {unreadMsgs.map((m) => (
+                    <div key={m.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 px-3 rounded-2xl transition">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="p-2 bg-rose-50 text-rose-600 rounded-xl shrink-0 mt-0.5">
+                          <MessageSquare size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">
+                            {lang === "sw" ? `Ujumbe kutoka kwa ${m.name}` : `Message from ${m.name}`}
+                          </h4>
+                          <p className="text-xs text-slate-600 mt-0.5 line-clamp-1 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            "{m.message}"
+                          </p>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                            <span className="flex items-center gap-1 shrink-0">
+                              <Clock size={11} />
+                              {formatDate(m.date)}
+                            </span>
+                            <span className="h-1 w-1 bg-slate-300 rounded-full shrink-0"></span>
+                            <span className="text-slate-500 shrink-0">
+                              {m.phone}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setTab && setTab("messages")}
+                        className="w-full sm:w-auto px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-extrabold hover:bg-rose-600 transition flex items-center justify-center gap-1.5 shadow-sm"
+                      >
+                        <MessageSquare size={13} />
+                        {txt.replyMessage}
+                      </button>
+                    </div>
+                  ))}
+
+                  {activeStock.map((n) => {
+                    const matchProduct = products.find(p => p.id === n.productId);
+                    return (
+                      <div key={n.id} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-slate-50/50 px-3 rounded-2xl transition">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl shrink-0 mt-0.5">
+                            <Package size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 text-sm truncate">
+                              {matchProduct ? matchProduct.name : `Product ID: ${n.productId.substring(0, 8)}`}
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {lang === "sw" ? "Mteja anataka akiba: " : "Waitlist Request: "} <span className="font-semibold text-slate-700">{n.email || n.phone || "-"}</span>
+                            </p>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-1">
+                              <span className="flex items-center gap-1 shrink-0">
+                                <AlertTriangle size={11} className="text-amber-500" />
+                                {lang === "sw" ? "Bidhaa Imeisha" : "Out of Stock"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => markNotified(n.id)}
+                          className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-extrabold hover:bg-blue-700 transition flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <Check size={13} />
+                          {txt.markNotifiedText}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 2. Pending Orders specific view */}
+          {activeSubTab === "orders" && (
+            <div className="space-y-4">
+              {pendingOrders.length === 0 ? (
+                <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mb-4 border border-amber-100">
+                    <ShoppingCart size={32} />
+                  </div>
+                  <h3 className="text-slate-800 font-bold text-lg">{txt.pendingOrders}</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mt-1">{txt.emptyOrders}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-bold">
+                        <th className="pb-3 pt-1 px-3">{lang === "sw" ? "Namba ya Oda" : "Order ID"}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.customer}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.totalPrice}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.date}</th>
+                        <th className="pb-3 pt-1 px-3 text-right">{txt.action}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingOrders.map((o) => (
+                        <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
+                          <td className="p-3 font-mono text-xs text-blue-600 font-semibold shrink-0">
+                            #{o.id.substring(0, 8)}
+                          </td>
+                          <td className="p-3">
+                            <div className="font-bold text-slate-800">{o.customerDetails?.name || "-"}</div>
+                            <div className="text-xs text-slate-500">{o.customerDetails?.phone || "-"}</div>
+                          </td>
+                          <td className="p-3 font-black text-slate-900">
+                            {formatCurrency(o.total)}
+                          </td>
+                          <td className="p-3 text-slate-500 text-xs shrink-0">
+                            {formatDate(o.date)}
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => setTab && setTab("orders")}
+                              className="px-3.5 py-1.5 bg-amber-500 text-white rounded-xl text-xs font-extrabold hover:bg-amber-600 transition shadow-xs"
+                            >
+                              {txt.viewOrder}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3. Unread Messages specific view */}
+          {activeSubTab === "messages" && (
+            <div className="space-y-4">
+              {unreadMsgs.length === 0 ? (
+                <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 mb-4 border border-rose-100">
+                    <MessageSquare size={32} />
+                  </div>
+                  <h3 className="text-slate-800 font-bold text-lg">{txt.unreadMsg}</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mt-1">{txt.emptyMessages}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {unreadMsgs.map((m) => (
+                    <div key={m.id} className="bg-slate-50 hover:bg-slate-100/50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-between transition gap-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-sm">{m.name}</h4>
+                            <p className="text-xs text-slate-400 font-semibold mt-0.5">{m.phone}</p>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium shrink-0 bg-slate-200/50 px-2 py-0.5 rounded-md">
+                            {formatDate(m.date)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-xl border border-slate-100/80 italic font-medium">
+                          "{m.message}"
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setTab && setTab("messages")}
+                        className="w-full py-2 bg-rose-500 text-white rounded-xl text-xs font-extrabold hover:bg-rose-600 transition shadow-xs flex items-center justify-center gap-1"
+                      >
+                        <MessageSquare size={13} />
+                        {txt.replyMessage}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. Stock alerts specific view */}
+          {activeSubTab === "stock" && (
+            <div className="space-y-4">
+              {activeStock.length === 0 ? (
+                <div className="text-center py-12 px-4 flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 mb-4 border border-blue-100">
+                    <Package size={32} />
+                  </div>
+                  <h3 className="text-slate-800 font-bold text-lg">{txt.stockAlerts}</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mt-1">{txt.emptyStock}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 font-bold">
+                        <th className="pb-3 pt-1 px-3">{txt.product}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.customer}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.phone}</th>
+                        <th className="pb-3 pt-1 px-3">{txt.status}</th>
+                        <th className="pb-3 pt-1 px-3 text-right">{txt.action}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeStock.map((n) => {
+                        const matchProduct = products.find(p => p.id === n.productId);
+                        return (
+                          <tr key={n.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition">
+                            <td className="p-3">
+                              <div className="font-bold text-slate-800">
+                                {matchProduct ? matchProduct.name : `ID: ${n.productId.substring(0, 8)}`}
+                              </div>
+                              <div className="text-xs text-slate-400 font-mono">
+                                {n.productId}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              {n.email || "-"}
+                            </td>
+                            <td className="p-3 font-mono text-xs">
+                              {n.phone || "-"}
+                            </td>
+                            <td className="p-3">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-700">
+                                {txt.pending}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => markNotified(n.id)}
+                                className="px-3.5 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-extrabold hover:bg-blue-700 transition shadow-xs"
+                              >
+                                {txt.markNotifiedText}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -6923,8 +7391,8 @@ export function OrdersAdmin({
   const filteredOrders = orders.filter((o) => {
     const matchesSearch =
       o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customerDetails.name.toLowerCase().includes(search.toLowerCase()) ||
-      o.customerDetails.phone.includes(search);
+      (o.customerDetails?.name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (o.customerDetails?.phone || "").includes(search);
 
     const oNorm = normalizeStatusToHighFid(o.status);
     let matchesStatus = false;
@@ -7839,7 +8307,7 @@ export function OrdersAdmin({
               <p className="text-sm text-slate-700 leading-relaxed">
                 Unafuta kabisa Oda ya mteja:{" "}
                 <strong className="text-slate-950">
-                  {orderToDelete.customerDetails.name}
+                  {orderToDelete.customerDetails?.name || "-"}
                 </strong>{" "}
                 yenye thamani ya{" "}
                 <strong className="text-slate-950">
@@ -14775,9 +15243,9 @@ export function InvoiceModal({
     let itemsText = order.items
       .map((i) => `- ${i.quantity}x ${i.name} (@ ${formatCurrency(i.price)})`)
       .join("\n");
-    let msg = `Habari ${order.customerDetails.name},\n\nAsante kwa manunuzi yako kutoka ${inv.companyName || "Orbi Shop"}.\n\nOda yako: #${getOrderNumber(order.id)}\nUnaweza kuiona na kuipakua (PDF) kupitia kiungo hiki:\n${invLink}\n\nJumla: ${formatCurrency(order.total)}\n\nTafadhali kamilisha malipo ili tuweze kutuma mzigo wako.`;
+    let msg = `Habari ${order.customerDetails?.name || "Mteja"},\n\nAsante kwa manunuzi yako kutoka ${inv.companyName || "Orbi Shop"}.\n\nOda yako: #${getOrderNumber(order.id)}\nUnaweza kuiona na kuipakua (PDF) kupitia kiungo hiki:\n${invLink}\n\nJumla: ${formatCurrency(order.total)}\n\nTafadhali kamilisha malipo ili tuweze kutuma mzigo wako.`;
 
-    let phoneStr = order.customerDetails.phone.replace(/[^0-9]/g, "");
+    let phoneStr = (order.customerDetails?.phone || "").replace(/[^0-9]/g, "");
     if (phoneStr.startsWith("0")) {
       phoneStr = "255" + phoneStr.substring(1);
     }
@@ -15256,12 +15724,12 @@ export function InvoiceModal({
                     MNUNUZI / BUYER:
                   </div>
                   <div className="font-extrabold text-[#1a2f52]">
-                    {order.customerDetails.name.toUpperCase()}
+                    {(order.customerDetails?.name || "Mteja").toUpperCase()}
                   </div>
-                  {order.customerDetails.phone && (
+                  {order.customerDetails?.phone && (
                     <div>TEL: {order.customerDetails.phone}</div>
                   )}
-                  {order.customerDetails.address && (
+                  {order.customerDetails?.address && (
                     <div className="text-[9px]">
                       LOC: {order.customerDetails.address.toUpperCase()}
                     </div>
