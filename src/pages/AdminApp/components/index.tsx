@@ -7800,8 +7800,8 @@ export function OrdersAdmin({
                 const targetOrders = selectedOrderIds.length > 0 ? orders.filter(o => selectedOrderIds.includes(o.id)) : orders;
                 const exportData = targetOrders.map(o => ({
                   OrderID: o.id,
-                  CustomerName: o.customerInfo?.name || '',
-                  CustomerPhone: o.customerInfo?.phone || '',
+                  CustomerName: o.customerInfo?.name || o.customerDetails?.name || '',
+                  CustomerPhone: o.customerInfo?.phone || o.customerDetails?.phone || '',
                   Total: o.total,
                   Status: o.status,
                   Date: new Date(o.createdAt).toLocaleString(),
@@ -7952,14 +7952,14 @@ export function OrdersAdmin({
                 />
               </div>
               <div className="pr-8 mb-3">
-                <div className="font-mono text-[10px] text-slate-400 mb-1">{new Date(order.createdAt).toLocaleString()}</div>
+                <div className="font-mono text-[10px] text-slate-400 mb-1">{new Date(order.date || order.createdAt || Date.now()).toLocaleString()}</div>
                 <div className="font-bold text-slate-800 break-all leading-tight">{order.id}</div>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-3 text-xs">
                 <div>
                   <div className="font-bold text-slate-500 mb-0.5">{lang === "sw" ? "Mteja" : "Customer"}</div>
-                  <div className="font-bold text-slate-800">{order.customerInfo.name}</div>
-                  <div className="text-slate-600">{order.customerInfo.phone}</div>
+                  <div className="font-bold text-slate-800">{order.customerInfo?.name || order.customerDetails?.name || "-"}</div>
+                  <div className="text-slate-600">{order.customerInfo?.phone || order.customerDetails?.phone || "-"}</div>
                 </div>
                 <div>
                   <div className="font-bold text-slate-500 mb-0.5">{lang === "sw" ? "Jumla" : "Total"}</div>
@@ -15727,11 +15727,11 @@ export function InvoiceModal({
                     {(order.customerDetails?.name || "Mteja").toUpperCase()}
                   </div>
                   {order.customerDetails?.phone && (
-                    <div>TEL: {order.customerDetails.phone}</div>
+                    <div>TEL: {order.customerDetails?.phone}</div>
                   )}
                   {order.customerDetails?.address && (
                     <div className="text-[9px]">
-                      LOC: {order.customerDetails.address.toUpperCase()}
+                      LOC: {order.customerDetails?.address.toUpperCase()}
                     </div>
                   )}
                 </div>

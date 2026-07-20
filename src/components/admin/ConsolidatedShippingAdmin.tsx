@@ -915,9 +915,9 @@ export function ConsolidatedShippingAdmin({ currentStaff }: ConsolidatedShipping
               onClick={() => {
                 const exportData = filteredOrders.map(o => ({
                   OrderID: o.id,
-                  CustomerName: o.customerInfo.name,
-                  Phone: o.customerInfo.phone,
-                  DeliveryRegion: o.shippingDetails?.address || o.customerInfo.region,
+                  CustomerName: o.customerInfo?.name || o.customerDetails?.name || '',
+                  Phone: o.customerInfo?.phone || o.customerDetails?.phone || '',
+                  DeliveryRegion: o.shippingDetails?.address || o.customerInfo?.region || '',
                   Status: o.status,
                   HubStatus: o.hubStatus || 'N/A',
                   Date: new Date(o.createdAt).toLocaleDateString()
@@ -1745,9 +1745,9 @@ export function ConsolidatedShippingAdmin({ currentStaff }: ConsolidatedShipping
                    <div className="grid grid-cols-2 gap-2 text-xs">
                      <div>
                        <div className="text-slate-500 font-bold">{isSw ? "Mteja" : "Customer"}</div>
-                       <div className="font-semibold text-slate-800">{order.customerInfo.name}</div>
-                       <div className="text-slate-500">{order.customerInfo.phone}</div>
-                       <div className="text-slate-500 line-clamp-1">{order.shippingDetails?.address || order.customerInfo.region}</div>
+                       <div className="font-semibold text-slate-800">{order.customerInfo?.name || order.customerDetails?.name || "-"}</div>
+                       <div className="text-slate-500">{order.customerInfo?.phone || order.customerDetails?.phone || "-"}</div>
+                       <div className="text-slate-500 line-clamp-1">{order.shippingDetails?.address || order.customerInfo?.region || "-"}</div>
                      </div>
                      <div>
                        <div className="text-slate-500 font-bold">{isSw ? "Kiasi" : "Total"}</div>

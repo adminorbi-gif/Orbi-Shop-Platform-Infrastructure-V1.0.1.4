@@ -337,7 +337,7 @@ export const BusinessRegistrationForm: React.FC<BusinessRegistrationFormProps> =
           </div>
           <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 border border-indigo-100 px-4 py-1.5 rounded-full text-[11px] font-black tracking-widest uppercase mb-4">
             <BadgeCheck size={14} />
-            {t('ORBI SHOP FOR BUSINESS', 'ORBI SHOP FOR BUSINESS')}
+            {t('ORBI BUSINESS', 'ORBI BUSINESS')}
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
             {t('Jiunge na Orbi Shop For Business', 'Join Orbi Shop For Business')}
