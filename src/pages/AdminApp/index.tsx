@@ -371,6 +371,7 @@ export interface OrderItemRowProps {
   onSendInvoice: (order: Order) => void;
   onDeleteOrder: (order: Order) => void;
   onShipClick: (order: Order) => void;
+  onPrintShippingLabel?: (order: Order) => void;
 }
 
 export const OrderItemRow = React.memo(function OrderItemRow({
@@ -382,6 +383,7 @@ export const OrderItemRow = React.memo(function OrderItemRow({
   onSendInvoice,
   onDeleteOrder,
   onShipClick,
+  onPrintShippingLabel,
 }: OrderItemRowProps) {
   const prevStatusRef = useRef(order.status);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -544,6 +546,16 @@ export const OrderItemRow = React.memo(function OrderItemRow({
         })()}
       </td>
       <td className="p-4 flex gap-2 flex-wrap">
+        {onPrintShippingLabel && (
+          <button
+            onClick={() => onPrintShippingLabel(order)}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs flex items-center gap-1 font-bold shadow-sm transition cursor-pointer"
+            title={lang === "sw" ? "Chapa Label ya Mzigo / Waybill" : "Print Shipping Label / Waybill"}
+          >
+            <Barcode size={13} strokeWidth={2.5} />
+            {lang === "sw" ? "Label ya Mzigo" : "Shipping Label"}
+          </button>
+        )}
         {(statusUpper === "CREATED" || statusUpper === "AWAITING_PAYMENT") && (
           <>
             <button

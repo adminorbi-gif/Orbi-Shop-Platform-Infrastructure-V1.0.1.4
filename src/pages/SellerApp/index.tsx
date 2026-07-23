@@ -253,6 +253,25 @@ export default function SellerApp({
     setProdCategory,
     prodFamily,
     setProdFamily,
+  } = useSellerApp({ seller, products, orders, onLogout, lang, setLang, onRefreshData });
+
+  const [boosterPaymentMethod, setBoosterPaymentMethod] = useState<"orbi_wallet" | "mobile_money">("orbi_wallet");
+  const [boosterWalletBalance, setBoosterWalletBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (seller?.id) {
+      fetch(`/api/v1/payments/lending/profile/${seller.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.profile) {
+            setBoosterWalletBalance(data.profile.tzsBalance);
+          }
+        })
+        .catch(err => console.warn("Failed to load booster wallet balance", err));
+    }
+  }, [seller]);
+
+  const {
     prodPrice,
     prodCurrency,
     setProdCurrency,
@@ -3100,14 +3119,16 @@ export default function SellerApp({
                       <form
                         onSubmit={async (e) => {
                           e.preventDefault();
-                          if (!boosterPhone.trim() || !boosterRef.trim()) {
-                            displayAlert(
-                              lang === "sw"
-                                ? "Jaza namba ya simu na kumbukumbu ya malipo"
-                                : "Please fill in phone and reference number",
-                              "error",
-                            );
-                            return;
+                          if (boosterPaymentMethod === "mobile_money") {
+                            if (!boosterPhone.trim() || !boosterRef.trim()) {
+                              displayAlert(
+                                lang === "sw"
+                                  ? "Jaza namba ya simu na kumbukumbu ya malipo"
+                                  : "Please fill in phone and reference number",
+                                "error",
+                              );
+                              return;
+                            }
                           }
 
                           setIsUpdatingBooster(true);
@@ -3120,10 +3141,12 @@ export default function SellerApp({
                                 body: JSON.stringify({
                                   sellerId: seller.id,
                                   planId: selectedPlanId,
-                                  paymentDetails: {
-                                    phone: boosterPhone,
-                                    reference: boosterRef,
-                                  },
+                                  paymentDetails: boosterPaymentMethod === "orbi_wallet"
+                                    ? { method: "orbi_wallet" }
+                                    : {
+                                        phone: boosterPhone,
+                                        reference: boosterRef,
+                                      },
                                 }),
                               },
                             );
@@ -3138,6 +3161,17 @@ export default function SellerApp({
                               );
                               setBoosterPhone("");
                               setBoosterRef("");
+                              
+                              // Refresh wallet balance too
+                              fetch(`/api/v1/payments/lending/profile/${seller.id}`)
+                                .then(res => res.json())
+                                .then(data => {
+                                  if (data.success && data.profile) {
+                                    setBoosterWalletBalance(data.profile.tzsBalance);
+                                  }
+                                })
+                                .catch(() => {});
+                                
                               onRefreshData();
                             } else {
                               displayAlert(
@@ -3233,81 +3267,171 @@ export default function SellerApp({
                           </div>
                         </div>
 
+                        {/* 1.5 Select Payment Method */}
+                        <div className="space-y-1.5 font-sans">
+                          <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            {lang === "sw" ? "2. CHAGUA NJIA YA MALIPO" : "2. CHOOSE PAYMENT METHOD"}
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setBoosterPaymentMethod("orbi_wallet")}
+                              className={`p-3.5 rounded-xl border text-left transition duration-150 outline-none cursor-pointer flex flex-col justify-between ${
+                                boosterPaymentMethod === "orbi_wallet"
+                                  ? "border-emerald-500 bg-emerald-50/20 ring-1 ring-emerald-500/10"
+                                  : "border-slate-150 hover:border-slate-200 bg-white"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full ${boosterPaymentMethod === "orbi_wallet" ? "bg-emerald-500" : "bg-slate-300"}`}></span>
+                                <span className="text-xs font-black text-slate-800">Orbi Pay Wallet</span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
+                                {lang === "sw" ? "Mizani ya sasa: " : "Current Balance: "}
+                                <span className="font-mono text-emerald-600 font-extrabold">
+                                  {boosterWalletBalance !== null ? formatCurrency(boosterWalletBalance) : "TZS 1,250,000"}
+                                </span>
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setBoosterPaymentMethod("mobile_money")}
+                              className={`p-3.5 rounded-xl border text-left transition duration-150 outline-none cursor-pointer flex flex-col justify-between ${
+                                boosterPaymentMethod === "mobile_money"
+                                  ? "border-amber-500 bg-amber-50/20 ring-1 ring-amber-500/10"
+                                  : "border-slate-150 hover:border-slate-200 bg-white"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full ${boosterPaymentMethod === "mobile_money" ? "bg-amber-500" : "bg-slate-300"}`}></span>
+                                <span className="text-xs font-black text-slate-800">{lang === "sw" ? "Lipa na Simu" : "Mobile Money"}</span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
+                                {lang === "sw" ? "M-Pesa, Tigo Pesa, Halopesa" : "M-Pesa, Tigo Pesa, Halopesa"}
+                              </p>
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Payment Instructions standard lipa namba */}
-                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-[10.5px] leading-relaxed text-slate-600 font-sans">
-                          <h5 className="font-extrabold text-slate-800 uppercase text-[9px] tracking-wide block">
-                            {lang === "sw"
-                              ? "2. MAELEKEZO YA MALIPO (TIGO/MPESA)"
-                              : "2. PAYMENT INSTRUCTIONS (TIGO/MPESA)"}
-                          </h5>
-                          <p className="block">
-                            {lang === "sw" ? (
-                              <>
-                                Tuma kiasi kilichochaguliwa kwenda:
-                                <br />
-                                <span className="text-orange-600 font-black">
-                                  LIPA NAMBA (TIGO/MPESA): 4488219
-                                </span>
-                                <br />
-                                Jina la Mfanyabiashara:{" "}
-                                <span className="font-black text-slate-800">
-                                  ORBI SHOPPING SERVICE
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                Please send the total selection price to our
-                                merchant reference:
-                                <br />
-                                <span className="text-orange-600 font-black">
-                                  LIPA NUMBER (TIGO/MPESA): 4488219
-                                </span>
-                                <br />
-                                Merchant registered name:{" "}
-                                <span className="font-black text-slate-800">
-                                  ORBI SHOPPING SERVICE
-                                </span>
-                              </>
-                            )}
-                          </p>
-                        </div>
+                        {boosterPaymentMethod === "mobile_money" ? (
+                          <>
+                            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-[10.5px] leading-relaxed text-slate-600 font-sans">
+                              <h5 className="font-extrabold text-slate-800 uppercase text-[9px] tracking-wide block">
+                                {lang === "sw"
+                                  ? "3. MAELEKEZO YA MALIPO (TIGO/MPESA)"
+                                  : "3. PAYMENT INSTRUCTIONS (TIGO/MPESA)"}
+                              </h5>
+                              <p className="block">
+                                {lang === "sw" ? (
+                                  <>
+                                    Tuma kiasi kilichochaguliwa kwenda:
+                                    <br />
+                                    <span className="text-orange-600 font-black">
+                                      LIPA NAMBA (TIGO/MPESA): 4488219
+                                    </span>
+                                    <br />
+                                    Jina la Mfanyabiashara:{" "}
+                                    <span className="font-black text-slate-800">
+                                      ORBI SHOPPING SERVICE
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    Please send the total selection price to our
+                                    merchant reference:
+                                    <br />
+                                    <span className="text-orange-600 font-black">
+                                      LIPA NUMBER (TIGO/MPESA): 4488219
+                                    </span>
+                                    <br />
+                                    Merchant registered name:{" "}
+                                    <span className="font-black text-slate-800">
+                                      ORBI SHOPPING SERVICE
+                                    </span>
+                                  </>
+                                )}
+                              </p>
+                            </div>
 
-                        {/* Phone and Reference number */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-sans">
-                          <div className="space-y-1">
-                            <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
-                              {lang === "sw"
-                                ? "Namba Imeyo Lipa"
-                                : "Payment Phone Number"}{" "}
-                              *
-                            </label>
-                            <input
-                              required
-                              type="text"
-                              placeholder="e.g. 0712345678"
-                              className="w-full bg-slate-50 border border-slate-150 p-3 rounded-xl text-xs font-semibold font-mono leading-none"
-                              value={boosterPhone}
-                              onChange={(e) => setBoosterPhone(e.target.value)}
-                            />
-                          </div>
+                            {/* Phone and Reference number */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-sans animate-in fade-in slide-in-from-top-1 duration-200">
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                                  {lang === "sw"
+                                    ? "Namba Iliyolipwa"
+                                    : "Payment Phone Number"}{" "}
+                                  *
+                                </label>
+                                <input
+                                  required
+                                  type="text"
+                                  placeholder="e.g. 0712345678"
+                                  className="w-full bg-slate-50 border border-slate-150 p-3 rounded-xl text-xs font-semibold font-mono leading-none"
+                                  value={boosterPhone}
+                                  onChange={(e) => setBoosterPhone(e.target.value)}
+                                />
+                              </div>
 
-                          <div className="space-y-1">
-                            <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                                  {lang === "sw"
+                                    ? "Kumbukumbuku ya M-PESA"
+                                    : "M-PESA / TIGO Reference"}{" "}
+                                  *
+                                </label>
+                                <input
+                                  required
+                                  type="text"
+                                  placeholder="e.g. RJ78HH902B"
+                                  className="w-full bg-slate-50 border border-slate-150 p-3 rounded-xl text-xs font-semibold font-mono leading-none uppercase"
+                                  value={boosterRef}
+                                  onChange={(e) => setBoosterRef(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="bg-emerald-50/50 border border-emerald-100/80 rounded-2xl p-4 space-y-2 text-[10.5px] leading-relaxed text-slate-600 font-sans animate-in fade-in slide-in-from-top-1 duration-200">
+                            <h5 className="font-extrabold text-emerald-800 uppercase text-[9px] tracking-wide block">
                               {lang === "sw"
-                                ? "Kumbukumbuku ya M-PESA"
-                                : "M-PESA / TIGO Reference"}{" "}
-                              *
-                            </label>
-                            <input
-                              required
-                              type="text"
-                              placeholder="e.g. RJ78HH902B"
-                              className="w-full bg-slate-50 border border-slate-150 p-3 rounded-xl text-xs font-semibold font-mono leading-none uppercase"
-                              value={boosterRef}
-                              onChange={(e) => setBoosterRef(e.target.value)}
-                            />
+                                ? "3. MALIPO YA HARAKA NA SALAMA YA ORBI PAY"
+                                : "3. SECURE INSTANT DEBIT VIA ORBI PAY"}
+                            </h5>
+                            <p className="block font-medium">
+                              {lang === "sw" ? (
+                                <>
+                                  Kiasi cha{" "}
+                                  <span className="font-extrabold text-slate-900">
+                                    {formatCurrency(
+                                      [
+                                        { id: "sub-gold", price: 120000 },
+                                        { id: "sub-silver", price: 45000 },
+                                        { id: "sub-bronze", price: 15000 },
+                                      ].find((p) => p.id === selectedPlanId)?.price || 15000
+                                    )}
+                                  </span>{" "}
+                                  kitakatwa salama kutoka kwenye akaunti yako ya Orbi Pay Wallet. Malipo yanakamilika papo hapo!
+                                </>
+                              ) : (
+                                <>
+                                  The exact budget of{" "}
+                                  <span className="font-extrabold text-slate-900">
+                                    {formatCurrency(
+                                      [
+                                        { id: "sub-gold", price: 120000 },
+                                        { id: "sub-silver", price: 45000 },
+                                        { id: "sub-bronze", price: 15000 },
+                                      ].find((p) => p.id === selectedPlanId)?.price || 15000
+                                    )}
+                                  </span>{" "}
+                                  will be securely deducted from your wallet balance. Activated in one click!
+                                </>
+                              )}
+                            </p>
                           </div>
-                        </div>
+                        )}
 
                         {/* Transaction Submission button */}
                         <button

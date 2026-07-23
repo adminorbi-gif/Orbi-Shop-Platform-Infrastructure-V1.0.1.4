@@ -102,6 +102,11 @@ export const MouseTrackZoom: React.FC<MouseTrackZoomProps> = ({ children, classN
       className={`overflow-hidden relative ${className}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsOpen(true);
+      }}
       style={{ cursor: 'pointer' }}
     >
       <div 
@@ -114,27 +119,6 @@ export const MouseTrackZoom: React.FC<MouseTrackZoomProps> = ({ children, classN
       >
         {children}
       </div>
-
-      {/* Tap-To-Zoom Button */}
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsOpen(true);
-        }}
-        onTouchStart={(e) => {
-          e.stopPropagation();
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setIsOpen(true);
-        }}
-        className="absolute right-3 bottom-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-900 shadow-lg ring-1 ring-slate-200/60 backdrop-blur-md transition-all hover:scale-110 active:scale-95 sm:h-9 sm:w-9"
-        title="Zoom details"
-      >
-        <ZoomIn size={18} className="stroke-[2.5] sm:size-15" />
-      </button>
 
       {/* Modal Lightbox */}
       {isOpen && (

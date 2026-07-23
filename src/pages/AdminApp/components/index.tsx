@@ -1,4 +1,5 @@
 import { OrderItemRow } from '../index';
+import { ShippingLabelModal } from '../../../components/admin/ShippingLabelModal';
 export { TicketsAdmin as MessagesAdmin } from "./TicketsAdmin";
 import { SellerDetailView } from './SellerDetailView';
 import { CustomerDetailView } from './CustomerDetailView';
@@ -6937,6 +6938,7 @@ export function OrdersAdmin({
   }, [orders, trendInterval, lang]);
 
   const [scanningOrder, setScanningOrder] = useState<Order | null>(null);
+  const [shippingLabelOrder, setShippingLabelOrder] = useState<Order | null>(null);
   const [scannedItemsMap, setScannedItemsMap] = useState<
     Record<string, number>
   >({});
@@ -7889,6 +7891,7 @@ export function OrdersAdmin({
                 onSendInvoice={sendInvoice}
                 onDeleteOrder={handleDeleteOrder}
                 onShipClick={handleShipClick}
+                onPrintShippingLabel={(orderToPrint) => setShippingLabelOrder(orderToPrint)}
               />
             ))}
             {paginatedOrders.length === 0 && (
@@ -8014,6 +8017,18 @@ export function OrdersAdmin({
           order={viewInvoiceOrder}
           onClose={() => setViewInvoiceOrder(null)}
           lang={lang}
+        />
+      )}
+
+      {shippingLabelOrder && (
+        <ShippingLabelModal
+          order={shippingLabelOrder}
+          onClose={() => setShippingLabelOrder(null)}
+          lang={lang}
+          onMarkShipped={async (orderId) => {
+            await updateStatus(orderId, "SHIPPED");
+            setShippingLabelOrder(null);
+          }}
         />
       )}
 

@@ -161,6 +161,86 @@ const calculateInsuranceFee = (declaredValueTzs: number, settings: DeliverySetti
   return { fee, coverage };
 };
 
+export const getOrbiHubConsolidationInfo = (cart: any[]) => {
+  if (!Array.isArray(cart) || cart.length === 0) {
+    return {
+      isConsolidated: false,
+      sellersCount: 0,
+      sameLocation: true,
+      hubName: "",
+      descriptionSw: "",
+      descriptionEn: "",
+    };
+  }
+
+  const sellerIds = Array.from(
+    new Set(
+      cart.map((item) => String(item.product?.sellerId || item.sellerId || "system"))
+    )
+  );
+
+  const sellersCount = sellerIds.length;
+  if (sellersCount <= 1) {
+    return {
+      isConsolidated: false,
+      sellersCount: 1,
+      sameLocation: true,
+      hubName: "",
+      descriptionSw: "",
+      descriptionEn: "",
+    };
+  }
+
+  const sellerLocations = Array.from(
+    new Set(
+      cart.map((item) => {
+        const prod = item.product || item;
+        const originZone = prod.sellerOriginZoneId || prod.seller_origin_zone_id;
+        const address = String(prod.sellerPickupAddress || prod.seller_pickup_address || "").toLowerCase();
+        if (address.includes("kariakoo")) return "kariakoo";
+        if (address.includes("mbezi")) return "mbezi";
+        if (address.includes("posta")) return "posta";
+        if (address.includes("arusha")) return "arusha";
+        if (address.includes("mwanza")) return "mwanza";
+        if (address.includes("dodoma")) return "dodoma";
+        return String(originZone || "dar-es-salaam");
+      })
+    )
+  );
+
+  const sameLocation = sellerLocations.length === 1;
+  const primaryLoc = sellerLocations[0] || "dar-es-salaam";
+
+  let hubName = "Orbi Central Hub";
+  if (primaryLoc.includes("kariakoo")) hubName = "Kariakoo Hub";
+  else if (primaryLoc.includes("mbezi")) hubName = "Mbezi Terminal Hub";
+  else if (primaryLoc.includes("posta")) hubName = "Posta Plaza Hub";
+  else if (primaryLoc.includes("arusha")) hubName = "Arusha Clocktower Hub";
+  else if (primaryLoc.includes("mwanza")) hubName = "Mwanza Capri Point Hub";
+  else if (primaryLoc.includes("dodoma")) hubName = "Dodoma Capital Hub";
+  else hubName = "Dar es Salaam Central Orbi Hub";
+
+  if (sameLocation) {
+    return {
+      isConsolidated: true,
+      sellersCount,
+      sameLocation: true,
+      hubName,
+      descriptionSw: `Wauzaji ${sellersCount} wako eneo moja (${hubName}). Bidhaa zitaunganishwa katika kituo cha ${hubName} na kusafirishwa kama kifurushi 1 cha pamoja.`,
+      descriptionEn: `${sellersCount} sellers are located in the same hub area (${hubName}). Items will be bundled at ${hubName} for 1 consolidated shipment.`
+    };
+  }
+
+  return {
+    isConsolidated: true,
+    sellersCount,
+    sameLocation: false,
+    hubName: "Orbi Transit Hub",
+    descriptionSw: `Wauzaji ${sellersCount} kutoka maeneo tofauti watakusanya bidhaa kwenye vituo vya Orbi Hub kwa uelekezaji wa safari zao.`,
+    descriptionEn: `${sellersCount} sellers from distinct locations will drop items at their local Orbi Hubs for route consolidation.`
+  };
+};
+
 export const applyCartDeliveryAdjustments = (
   quote: any,
   cart: any[],
@@ -169,6 +249,7 @@ export const applyCartDeliveryAdjustments = (
 ) => {
   const settings = mapDeliverySettings(settingsInput || DEFAULT_DELIVERY_SETTINGS);
   const metrics = getCartDeliveryMetrics(cart, settings);
+  const hubConsolidation = getOrbiHubConsolidationInfo(cart);
 
   if (metrics.chargeableWeightKg > settings.maxTotalWeightKg) {
     return {
@@ -177,6 +258,7 @@ export const applyCartDeliveryAdjustments = (
       reason: `DELIVERY_MAX_WEIGHT_EXCEEDED:${metrics.chargeableWeightKg}:${settings.maxTotalWeightKg}`,
       totalFee: 0,
       packageSummary: metrics,
+      hubConsolidation,
       costBreakdown: {
         ...(quote?.costBreakdown || {}),
         settings,
@@ -196,6 +278,7 @@ export const applyCartDeliveryAdjustments = (
     ...quote,
     totalFee,
     packageSummary: metrics,
+    hubConsolidation,
     insurance: {
       enabled: settings.insuranceEnabled,
       selected: Boolean(options.applyInsurance),

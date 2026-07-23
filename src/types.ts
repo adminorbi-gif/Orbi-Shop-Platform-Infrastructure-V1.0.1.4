@@ -120,6 +120,14 @@ export interface DeliveryQuote {
   quoteMode?: "route_exact" | "route_estimate" | "zone_fallback" | "route_required";
   routeProvider?: "google_routes" | "distance_estimate" | "zone_rules";
   reason?: string;
+  hubConsolidation?: {
+    isConsolidated: boolean;
+    sellersCount: number;
+    sameLocation: boolean;
+    hubName: string;
+    descriptionSw: string;
+    descriptionEn: string;
+  };
   shippingPlan?: {
     available: boolean;
     recommended?: {
@@ -388,6 +396,8 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  soldBy?: string;
+  sellerId?: string;
 }
 
 export interface Order {
@@ -413,6 +423,11 @@ export interface Order {
   deliveryEta?: string;
   brokerId?: string;
   brokerCommissionAmount?: number;
+  sellerName?: string;
+  sellerId?: string;
+  shippingDetails?: { address?: string; zoneName?: string; status?: string };
+  hubStatus?: string;
+  itemInboundStates?: string;
 }
 
 export interface OrderStatusLog {

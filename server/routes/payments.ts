@@ -1074,50 +1074,269 @@ function saveSellerFinances(sellerId: string, data: any) {
 
 // 1. Get seller lending and wallet profile
 router.get("/lending/profile/:sellerId", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId } = req.params;
+    const profile = getSellerFinances(sellerId);
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to load lending profile"
+    });
+  }
 });
 
 // 2. Submit a Loan Application (Working Capital or Kulima Micro-Loan)
 router.post("/lending/apply-loan", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId, type, amount, durationMonths, cropType, expectedAcreage, expectedYield } = req.body;
+    if (!sellerId || !type || !amount) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+    const profile = getSellerFinances(sellerId);
+    
+    const rate = type === "kulima" ? 4.5 : 8.5;
+    const interest = Math.round((amount * rate * (durationMonths / 12)) / 100);
+    const newLoan = {
+      id: `LN-${Math.floor(Math.random() * 9000) + 1000}`,
+      type,
+      amount,
+      durationMonths,
+      interestRate: rate,
+      cropType,
+      expectedAcreage,
+      expectedYield,
+      disbursedAt: new Date().toISOString(),
+      remainingAmount: amount + interest,
+      status: "active" as const
+    };
+    
+    profile.loans = profile.loans || [];
+    profile.loans.push(newLoan);
+    profile.tzsBalance = (profile.tzsBalance || 0) + amount; // Disburse instantly to Orbi Pay wallet balance!
+    
+    profile.transactions = profile.transactions || [];
+    profile.transactions.unshift({
+      id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+      type: `${type}_loan_disbursal`,
+      amount,
+      currency: "TZS",
+      timestamp: new Date().toISOString(),
+      description: type === "kulima" ? `Kulima Micro-Loan Disbursal for ${cropType}` : "CRDB/NMB Instant Working Capital Loan Disbursal",
+      status: "success"
+    });
+    
+    saveSellerFinances(sellerId, profile);
+    
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to apply for loan"
+    });
+  }
 });
 
 // 3. Repay a Loan
 router.post("/lending/repay-loan", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId, loanId, amount } = req.body;
+    if (!sellerId || !loanId || !amount) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+    const profile = getSellerFinances(sellerId);
+    
+    if (profile.tzsBalance < amount) {
+      return res.status(400).json({ success: false, error: "Mizani haitoshi kukamilisha malipo / Insufficient balance" });
+    }
+    
+    profile.loans = profile.loans || [];
+    const loan = profile.loans.find((l: any) => l.id === loanId);
+    if (!loan) {
+      return res.status(404).json({ success: false, error: "Loan not found" });
+    }
+    
+    loan.remainingAmount = Math.max(0, loan.remainingAmount - amount);
+    if (loan.remainingAmount === 0) {
+      loan.status = "repaid";
+    }
+    
+    profile.tzsBalance -= amount;
+    
+    profile.transactions = profile.transactions || [];
+    profile.transactions.unshift({
+      id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+      type: "loan_repayment",
+      amount,
+      currency: "TZS",
+      timestamp: new Date().toISOString(),
+      description: `Loan repayment installment for ${loanId}`,
+      status: "success"
+    });
+    
+    saveSellerFinances(sellerId, profile);
+    
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to process loan repayment"
+    });
+  }
 });
 
 // 4. Toggle Stablecoin Settings
 router.post("/stablecoin/toggle", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId, hasEnabledStablecoins } = req.body;
+    if (!sellerId) {
+      return res.status(400).json({ success: false, error: "Missing sellerId" });
+    }
+    const profile = getSellerFinances(sellerId);
+    profile.hasEnabledStablecoins = hasEnabledStablecoins;
+    
+    saveSellerFinances(sellerId, profile);
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to toggle stablecoin settings"
+    });
+  }
 });
 
 // 5. Convert Stablecoin to TZS
 router.post("/stablecoin/convert", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId, stablecoin, amount, rate } = req.body;
+    if (!sellerId || !stablecoin || !amount || !rate) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+    const profile = getSellerFinances(sellerId);
+    
+    if (stablecoin === "USDC") {
+      if ((profile.usdcBalance || 0) < amount) return res.status(400).json({ success: false, error: "Insufficient USDC balance" });
+      profile.usdcBalance -= amount;
+    } else {
+      if ((profile.daiBalance || 0) < amount) return res.status(400).json({ success: false, error: "Insufficient DAI balance" });
+      profile.daiBalance -= amount;
+    }
+    
+    const tzsCredited = amount * rate;
+    profile.tzsBalance = (profile.tzsBalance || 0) + tzsCredited;
+    
+    profile.transactions = profile.transactions || [];
+    profile.transactions.unshift({
+      id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+      type: "stablecoin_conversion",
+      amount: tzsCredited,
+      currency: "TZS",
+      timestamp: new Date().toISOString(),
+      description: `Converted ${amount} ${stablecoin} to TZS at ${rate}`,
+      status: "success"
+    });
+    
+    saveSellerFinances(sellerId, profile);
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to convert stablecoins"
+    });
+  }
+});
+
+// 5.5 Deduct from Wallet for Service Payment (e.g. Ad Campaigns, Promotions)
+router.post("/wallet/deduct", async (req: Request, res: Response) => {
+  try {
+    const { sellerId, amount, serviceName, description } = req.body;
+    if (!sellerId || !amount) {
+      return res.status(400).json({ success: false, error: "Missing required fields (sellerId, amount)" });
+    }
+    const profile = getSellerFinances(sellerId);
+    
+    if ((profile.tzsBalance || 0) < amount) {
+      return res.status(400).json({ success: false, error: "Mizani yako ya Orbi Pay Wallet haitoshi kukamilisha malipo haya. Tafadhali weka fedha kwanza. / Insufficient Orbi Pay balance." });
+    }
+    
+    profile.tzsBalance -= amount;
+    
+    profile.transactions = profile.transactions || [];
+    profile.transactions.unshift({
+      id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+      type: "service_payment",
+      amount,
+      currency: "TZS",
+      timestamp: new Date().toISOString(),
+      description: description || `Paid for ${serviceName || "Orbi Service"}`,
+      status: "success"
+    });
+    
+    saveSellerFinances(sellerId, profile);
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to execute wallet deduction"
+    });
+  }
 });
 
 // 6. Execute Payout request (withdrawing TZS Balance)
 router.post("/payout/execute", async (req: Request, res: Response) => {
-  return res.status(503).json({
-    success: false,
-    error: "service are under maintenance try again or call support"
-  });
+  try {
+    const { sellerId, amount, provider, account } = req.body;
+    if (!sellerId || !amount || !provider || !account) {
+      return res.status(400).json({ success: false, error: "Missing required fields" });
+    }
+    const profile = getSellerFinances(sellerId);
+    
+    if ((profile.tzsBalance || 0) < amount) {
+      return res.status(400).json({ success: false, error: "Mizani haitoshi kutoa kiasi hiki / Insufficient balance to withdraw" });
+    }
+    
+    profile.tzsBalance -= amount;
+    
+    profile.transactions = profile.transactions || [];
+    profile.transactions.unshift({
+      id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+      type: "payout_withdrawal",
+      amount,
+      currency: "TZS",
+      timestamp: new Date().toISOString(),
+      description: `Withdrew to ${provider} account ${account}`,
+      status: "success"
+    });
+    
+    saveSellerFinances(sellerId, profile);
+    return res.json({
+      success: true,
+      profile
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || "Failed to execute payout"
+    });
+  }
 });
 
 export default router;

@@ -1,7 +1,66 @@
 import { Router } from "express";
 import { supabase } from "../lib/supabase.js";
+import path from "path";
+import fs from "fs";
 
 const router = Router();
+const FINANCES_FILE = path.join(process.cwd(), "server/data/seller_lending_and_wallets.json");
+
+function deductSellerOrbiWallet(sellerId: string, amount: number, planName: string) {
+  let profile: any = null;
+  try {
+    if (fs.existsSync(FINANCES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(FINANCES_FILE, "utf8"));
+      if (data[sellerId]) profile = data[sellerId];
+    }
+  } catch (e) {
+    console.error("Error reading seller finances:", e);
+  }
+
+  if (!profile) {
+    const scoreSeed = sellerId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const creditScore = 650 + (scoreSeed % 180);
+    profile = {
+      creditScore,
+      salesVelocity: creditScore > 750 ? "excellent" : "good",
+      paymentConsistency: creditScore > 720 ? "excellent" : "good",
+      disputeRate: 0.0,
+      hasEnabledStablecoins: false,
+      tzsBalance: 1250000 + (scoreSeed % 15) * 450000,
+      usdcBalance: (scoreSeed % 10) * 150,
+      daiBalance: (scoreSeed % 5) * 80,
+      loans: [],
+      transactions: []
+    };
+  }
+
+  if (profile.tzsBalance < amount) {
+    throw new Error("Mizani yako ya Orbi Pay Wallet haitoshi kukamilisha malipo haya. Tafadhali weka fedha kwanza. / Insufficient Orbi Pay balance.");
+  }
+
+  profile.tzsBalance -= amount;
+  profile.transactions = profile.transactions || [];
+  profile.transactions.unshift({
+    id: `TX-${Math.floor(Math.random() * 90000) + 10000}`,
+    type: "subscription_payment",
+    amount,
+    currency: "TZS",
+    timestamp: new Date().toISOString(),
+    description: `Paid for ${planName} Booster subscription using Orbi Pay Wallet`,
+    status: "success"
+  });
+
+  try {
+    let allData: any = {};
+    if (fs.existsSync(FINANCES_FILE)) {
+      allData = JSON.parse(fs.readFileSync(FINANCES_FILE, "utf8"));
+    }
+    allData[sellerId] = profile;
+    fs.writeFileSync(FINANCES_FILE, JSON.stringify(allData, null, 2), "utf8");
+  } catch (e) {
+    console.error("Error saving seller finances:", e);
+  }
+}
 
 /**
  * POST /api/subscriptions/subscribe
@@ -46,6 +105,18 @@ router.post("/subscribe", async (req: any, res: any) => {
         success: false, 
         message: "Specifed subscription plan not found" 
       });
+    }
+
+    // Deduct balance if paid via Orbi Pay Wallet
+    if (paymentDetails?.method === "orbi_wallet") {
+      try {
+        deductSellerOrbiWallet(sellerId, plan.price, plan.name);
+      } catch (err: any) {
+        return res.status(400).json({
+          success: false,
+          message: err.message
+        });
+      }
     }
 
     // 2. Fetch all sellers

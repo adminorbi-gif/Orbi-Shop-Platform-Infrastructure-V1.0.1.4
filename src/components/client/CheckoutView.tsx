@@ -63,6 +63,19 @@ export function CheckoutView({
     return cart.some(item => item.product?.wholesaleTiers && item.product.wholesaleTiers.length > 0);
   }, [cart]);
 
+  const sellerGroups = useMemo(() => {
+    const groups: Record<string, { sellerId: string; sellerName: string; items: any[] }> = {};
+    cart.forEach((item) => {
+      const sId = item.product?.sellerId || "system";
+      const sName = item.product?.soldBy || item.product?.sellerName || "Duka la Orbi";
+      if (!groups[sId]) {
+        groups[sId] = { sellerId: sId, sellerName: sName, items: [] };
+      }
+      groups[sId].items.push(item);
+    });
+    return Object.values(groups);
+  }, [cart]);
+
   const getErrors = () => {
     const errs: any = {};
     if (!details.name.trim()) {
@@ -252,29 +265,63 @@ export function CheckoutView({
                   {lang === "sw" ? "Muhtasari wa Oda" : "Order Summary"}
                 </h3>
                 
-                <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-1 no-scrollbar">
-                  {cart.map((item, i) => {
-                    const price = getProductPriceForQty(item.product, item.quantity);
-                    return (
-                      <div key={i} className="flex gap-3 items-center">
-                        <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">
-                          <ImageWithSkeleton
-                            src={item.product.images?.[0]}
-                            alt=""
-                            containerClassName="w-full h-full"
-                            referrerPolicy="no-referrer"
-                          />
+                {sellerGroups.length > 1 && deliveryQuote?.hubConsolidation?.isConsolidated && (
+                  <div className="p-3 bg-gradient-to-br from-indigo-50 to-blue-50 border border-blue-200/80 rounded-2xl space-y-1.5 shadow-2xs animate-in fade-in">
+                    <div className="flex items-center gap-1.5 text-blue-900">
+                      <Zap size={14} className="text-blue-600 fill-blue-500 shrink-0" />
+                      <p className="text-[11px] font-black uppercase tracking-tight text-blue-950">
+                        {lang === "sw" ? "Ufungashaji wa Pamoja wa Orbi Hub" : "Orbi Hub Consolidated Shipping"}
+                      </p>
+                    </div>
+                    <p className="text-[10px] font-semibold text-blue-800 leading-relaxed">
+                      {lang === "sw" ? deliveryQuote.hubConsolidation.descriptionSw : deliveryQuote.hubConsolidation.descriptionEn}
+                    </p>
+                    <div className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 pt-0.5">
+                      <ShieldCheck size={12} className="text-blue-500 shrink-0" />
+                      <span>
+                        {lang === "sw"
+                          ? `Wauzaji ${sellerGroups.length} • Kifurushi 1 cha pamoja`
+                          : `${sellerGroups.length} Sellers • 1 Bundled Package`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-1 no-scrollbar">
+                  {sellerGroups.map((group, groupIdx) => (
+                    <div key={groupIdx} className="space-y-2 border-b border-slate-200/60 pb-3 last:border-none last:pb-0">
+                      {sellerGroups.length > 1 && (
+                        <div className="flex items-center justify-between text-[10px] font-extrabold text-slate-500 bg-slate-100/70 px-2 py-1 rounded-lg">
+                          <span>{lang === "sw" ? "Muuzaji:" : "Seller:"} <strong className="text-slate-800 font-black">{group.sellerName}</strong></span>
+                          <span className="text-[9px] bg-blue-100 text-blue-700 font-black px-1.5 py-0.5 rounded uppercase">Orbi Hub Partner</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">{item.product.name}</p>
-                          <p className="text-[10px] text-slate-400 font-bold">{item.quantity} x {formatCurrency(price)}</p>
-                        </div>
-                        <div className="text-xs font-black text-slate-700 shrink-0">
-                          {formatCurrency(price * item.quantity)}
-                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {group.items.map((item, i) => {
+                          const price = getProductPriceForQty(item.product, item.quantity);
+                          return (
+                            <div key={i} className="flex gap-3 items-center">
+                              <div className="w-10 h-10 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">
+                                <ImageWithSkeleton
+                                  src={item.product.images?.[0]}
+                                  alt=""
+                                  containerClassName="w-full h-full"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-slate-800 truncate">{item.product.name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold">{item.quantity} x {formatCurrency(price)}</p>
+                              </div>
+                              <div className="text-xs font-black text-slate-700 shrink-0">
+                                {formatCurrency(price * item.quantity)}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
 
                 {hasWholesaleItems && (

@@ -80,6 +80,29 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   );
 
+  // Orbi Pay Integration
+  const [marketingPaymentMethod, setMarketingPaymentMethod] = useState<"orbi_wallet" | "mobile_money">("orbi_wallet");
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [paymentPhone, setPaymentPhone] = useState("");
+  const [paymentRef, setPaymentRef] = useState("");
+
+  const fetchWalletBalance = async () => {
+    if (!seller?.id) return;
+    try {
+      const res = await fetch(`/api/v1/payments/lending/profile/${seller.id}`);
+      const data = await res.json();
+      if (data.success && data.profile) {
+        setWalletBalance(data.profile.tzsBalance);
+      }
+    } catch (e) {
+      console.warn("Failed to load wallet balance for ad manager", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletBalance();
+  }, [seller]);
+
   // Load existing paid placement ads
   const loadSellerAds = async () => {
     setLoading(true);
@@ -174,6 +197,65 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
       metrics: { impressions: 0, clicks: 0, ctr: 0 },
       createdAt: Date.now(),
     };
+
+    if (marketingPaymentMethod === "orbi_wallet") {
+      if (walletBalance === null || walletBalance < Number(budgetLimit)) {
+        displayAlert(
+          lang === "sw"
+            ? "Mizani yako ya Orbi Pay haitoshi kukamilisha malipo haya ya bajeti ya tangazo."
+            : "Your Orbi Pay Wallet balance is insufficient to fund this campaign budget.",
+          "error"
+        );
+        return;
+      }
+
+      try {
+        const deductRes = await fetch("/api/v1/payments/wallet/deduct", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sellerId: seller.id,
+            amount: Number(budgetLimit),
+            serviceName: "Marketplace Ad",
+            description: `CPC Prepaid Ad Campaign Budget: ${adTitle.trim()}`
+          })
+        });
+        const deductData = await deductRes.json();
+        if (!deductRes.ok || !deductData.success) {
+          throw new Error(deductData.error || "Wallet deduction failed");
+        }
+        
+        (campaign as any).paymentMethod = "orbi_wallet";
+        (campaign as any).funded = true;
+        (campaign as any).fundingTransactionId = deductData.profile?.transactions?.[0]?.id || `TX-AD-${Date.now()}`;
+        
+        if (deductData.profile) {
+          setWalletBalance(deductData.profile.tzsBalance);
+        }
+      } catch (err: any) {
+        displayAlert(
+          lang === "sw"
+            ? `Malipo ya Orbi Pay yameshindwa: ${err.message}`
+            : `Orbi Pay payment failed: ${err.message}`,
+          "error"
+        );
+        return;
+      }
+    } else {
+      if (!paymentPhone.trim() || !paymentRef.trim()) {
+        displayAlert(
+          lang === "sw"
+            ? "Tafadhali jaza namba ya simu na kumbukumbu ya malipo ya mtandao."
+            : "Please fill in your payment phone and network transaction reference.",
+          "error"
+        );
+        return;
+      }
+      (campaign as any).paymentMethod = "mobile_money";
+      (campaign as any).paymentPhone = paymentPhone.trim();
+      (campaign as any).paymentRef = paymentRef.trim().toUpperCase();
+      (campaign as any).funded = false;
+    }
 
     try {
       const allAds = await db.getAds();
@@ -468,6 +550,26 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                       </div>
                     </div>
 
+                    {/* Payment Info Badge */}
+                    <div className="flex items-center justify-between text-[9px] font-bold py-1.5 bg-slate-50/50 px-2.5 rounded-xl border border-slate-100">
+                      <span className="text-slate-400">
+                        {lang === "sw" ? "Malipo ya Bajeti:" : "Billing & Funding:"}
+                      </span>
+                      <span>
+                        {(ad as any).paymentMethod === "mobile_money" ? (
+                          <span className="text-amber-700 font-black uppercase tracking-wider text-[8px] flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Mobile Money
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-black uppercase tracking-wider text-[8px] flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Orbi Pay Wallet
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
                     {/* Footer timeline info */}
                     <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[9px] font-medium text-slate-400">
                       <span className="flex items-center gap-1">
@@ -688,6 +790,116 @@ export function SellerMarketing({ lang, seller, products, displayAlert }: Seller
                   />
                 </div>
               </div>
+
+              {/* Payment Method Selector */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  {lang === "sw" ? "NJIA YA MALIPO YA BAJETI" : "CAMPAIGN BUDGET PAYMENT METHOD"}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarketingPaymentMethod("orbi_wallet")}
+                    className={`p-3 rounded-xl border text-left transition duration-150 outline-none cursor-pointer flex flex-col justify-between ${
+                      marketingPaymentMethod === "orbi_wallet"
+                        ? "border-emerald-500 bg-emerald-50/20 ring-1 ring-emerald-500/10"
+                        : "border-slate-150 hover:border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${marketingPaymentMethod === "orbi_wallet" ? "bg-emerald-500" : "bg-slate-300"}`}></span>
+                      <span className="text-[11px] font-black text-slate-800">Orbi Pay Wallet</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-1 font-medium">
+                      {lang === "sw" ? "Mizani: " : "Balance: "}
+                      <span className="font-mono text-emerald-600 font-bold">
+                        {walletBalance !== null ? `${walletBalance.toLocaleString()} TZS` : "Inapakia..."}
+                      </span>
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMarketingPaymentMethod("mobile_money")}
+                    className={`p-3 rounded-xl border text-left transition duration-150 outline-none cursor-pointer flex flex-col justify-between ${
+                      marketingPaymentMethod === "mobile_money"
+                        ? "border-amber-500 bg-amber-50/20 ring-1 ring-amber-500/10"
+                        : "border-slate-150 hover:border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${marketingPaymentMethod === "mobile_money" ? "bg-amber-500" : "bg-slate-300"}`}></span>
+                      <span className="text-[11px] font-black text-slate-800">{lang === "sw" ? "Lipa na Simu" : "Mobile Money"}</span>
+                    </div>
+                    <p className="text-[9px] text-slate-400 mt-1 font-medium">
+                      {lang === "sw" ? "Tigo/M-Pesa manual" : "Tigo/M-Pesa manual"}
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-inputs dependent on payment method selection */}
+              {marketingPaymentMethod === "mobile_money" ? (
+                <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50/30 border border-amber-100/60 rounded-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="space-y-1 col-span-2 text-[10px] text-slate-500 font-semibold leading-relaxed">
+                    <p className="block">
+                      {lang === "sw" ? (
+                        <>
+                          Tuma kiasi cha <span className="font-bold text-slate-800">{(budgetLimit || 0).toLocaleString()} TZS</span> kwenda LIPA NAMBA: <span className="font-bold text-orange-600">4488219</span> (ORBI SHOPPING SERVICE) kisha weka maelezo hapa chini:
+                        </>
+                      ) : (
+                        <>
+                          Send <span className="font-bold text-slate-800">{(budgetLimit || 0).toLocaleString()} TZS</span> to LIPA NUMBER: <span className="font-bold text-orange-600">4488219</span> (ORBI SHOPPING SERVICE) and fill details below:
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                      {lang === "sw" ? "Namba Iliyolipwa" : "Payment Phone Number"} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 0712345678"
+                      className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-xs font-semibold font-mono leading-none"
+                      value={paymentPhone}
+                      onChange={(e) => setPaymentPhone(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                      {lang === "sw" ? "Kumbukumbu ya Malipo" : "Transaction Ref"} *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. RJ78HH902B"
+                      className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-xs font-semibold font-mono leading-none uppercase"
+                      value={paymentRef}
+                      onChange={(e) => setPaymentRef(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50/40 border border-emerald-100/60 rounded-xl space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center gap-1.5 text-emerald-800 font-black uppercase text-[9px] tracking-wide">
+                    <span>⚡ Orbi Pay Quick Checkout</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                    {lang === "sw" ? (
+                      <>
+                        Kiasi cha <span className="font-bold text-slate-800">{(budgetLimit || 0).toLocaleString()} TZS</span> kitakatwa moja kwa moja kutoka kwenye Orbi Pay Wallet yako ili kuanzisha kampeni hii. Kampeni yako itaanza kupokea mibofyo ikishaidhinishwa na meneja!
+                      </>
+                    ) : (
+                      <>
+                        An amount of <span className="font-bold text-slate-800">{(budgetLimit || 0).toLocaleString()} TZS</span> will be directly deducted from your active Orbi Pay balance to start this campaign. Runs instantly upon approval!
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="pt-4 border-t border-slate-100 flex gap-2">

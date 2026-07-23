@@ -27,8 +27,11 @@ import {
   User,
   Mail,
   Phone,
-  CreditCard
+  CreditCard,
+  Printer,
+  Barcode
 } from "lucide-react";
+import { ShippingLabelModal } from "./ShippingLabelModal";
 import { useI18n } from "../../pages/AdminApp";
 import { useDialog } from "../CustomDialogContext";
 import { db } from "../../lib/db";
@@ -107,6 +110,7 @@ export function ConsolidatedShippingAdmin({ currentStaff }: ConsolidatedShipping
   
   // Selection for bulk actions
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [shippingLabelOrder, setShippingLabelOrder] = useState<Order | null>(null);
   
   const handleSelectOrder = (id: string, checked: boolean) => {
     setSelectedOrderIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id));
@@ -1237,6 +1241,15 @@ export function ConsolidatedShippingAdmin({ currentStaff }: ConsolidatedShipping
                               <Eye size={12} />
                               <span>{isSw ? "Sasisha Hub" : "Manage Hub"}</span>
                             </button>
+
+                            <button
+                              onClick={() => setShippingLabelOrder(order)}
+                              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-[10px] transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              title={isSw ? "Chapa Label ya Mzigo / Waybill" : "Print Shipping Label / Waybill"}
+                            >
+                              <Printer size={12} />
+                              <span>{isSw ? "Label" : "Label"}</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2089,6 +2102,14 @@ export function ConsolidatedShippingAdmin({ currentStaff }: ConsolidatedShipping
             </form>
           </div>
         </div>
+      )}
+
+      {shippingLabelOrder && (
+        <ShippingLabelModal
+          order={shippingLabelOrder}
+          onClose={() => setShippingLabelOrder(null)}
+          lang={lang}
+        />
       )}
 
     </div>

@@ -208,24 +208,7 @@ export const NicheShoppingCenter: React.FC<NicheShoppingCenterProps> = ({
 
   if (!nicheObj) return null;
 
-  let displayProducts = products;
-  if (nicheObj.name === "Realtime") {
-    displayProducts = products.map(p => {
-      if (p.niche === "Realtime" && ["Kariakoo", "Mbezi", "Posta", "Arusha", "Mwanza", "Dodoma"].includes(p.category)) {
-        return p;
-      }
-      const hubList = ["Kariakoo", "Mbezi", "Posta", "Arusha", "Mwanza", "Dodoma"];
-      const hash = getStringHash(p.id || p.name);
-      const hubName = hubList[hash % hubList.length];
-      return {
-        ...p,
-        niche: "Realtime",
-        category: hubName
-      };
-    });
-  } else {
-    displayProducts = products.filter((p) => p.niche === nicheObj.name || (!p.niche && nicheObj.name === "Mengineyo"));
-  }
+  let displayProducts = products.filter((p) => p.niche === nicheObj.name || (!p.niche && nicheObj.name === "Mengineyo"));
 
   if (selectedCategory !== "Zote") {
     displayProducts = displayProducts.filter((p) => p.category === selectedCategory);

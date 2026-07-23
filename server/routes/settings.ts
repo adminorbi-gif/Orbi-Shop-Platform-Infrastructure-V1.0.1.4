@@ -517,19 +517,6 @@ router.get("/service-health", async (req, res) => {
 // 2. NICHES
 router.get("/niches", async (req, res) => {
   try {
-    const realtimeNicheObj = {
-      name: "Realtime",
-      icon: "Zap",
-      categories: [
-        { name: "Kariakoo", image: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300", families: ["Wholesale", "Retail", "Express"] },
-        { name: "Mbezi", image: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&q=80&w=300", families: ["Terminal", "Transit"] },
-        { name: "Posta", image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=300", families: ["Plaza", "HQ"] },
-        { name: "Arusha", image: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&q=80&w=300", families: ["Clocktower", "Northern"] },
-        { name: "Mwanza", image: "https://images.unsplash.com/photo-1504609773096-104ff2c73ba4?auto=format&fit=crop&q=80&w=300", families: ["Capri Point", "Lake Zone"] },
-        { name: "Dodoma", image: "https://images.unsplash.com/photo-1531971589569-0d93700fd1a5?auto=format&fit=crop&q=80&w=300", families: ["Cathedral Area", "Capital"] }
-      ]
-    };
-
     // 1. Try reading from promotions FIRST because it contains the COMPLETE JSON (including sub-categories)
     let nichesList: any[] = [];
     try {
@@ -547,9 +534,6 @@ router.get("/niches", async (req, res) => {
         ...n,
         categories: (n.categories || []).map((c: any) => typeof c === 'string' ? { name: c, families: [] } : c)
       }));
-      if (!nichesList.some(n => n.name === "Realtime")) {
-        nichesList.unshift(realtimeNicheObj);
-      }
       return res.json({ success: true, data: nichesList });
     }
 
@@ -577,10 +561,6 @@ router.get("/niches", async (req, res) => {
             categories: fallbackCats.map((cat: string) => ({ name: cat, families: [] }))
           };
         });
-        
-        if (!formattedData.some(n => n.name === "Realtime")) {
-          formattedData.unshift(realtimeNicheObj);
-        }
 
         return res.json({
           success: true,
