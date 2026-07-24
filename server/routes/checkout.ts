@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { supabase, encrypt } from "../lib/supabase.js";
-import { callOrbiPayGateway, getPayServiceKey } from "../lib/orbiPayGateway.js";
+import { getPayServiceKey, orbiPayGateway } from "../lib/orbiPayGateway.js";
 import { quoteCartDelivery } from "../lib/deliveryQuote.js";
 import { quoteCartRouteDelivery } from "../lib/routeDeliveryQuote.js";
 import { getDeliverySettings } from "../lib/deliverySettings.js";
@@ -606,10 +606,8 @@ router.post("/", async (req, res) => {
 
     let aggregateGatewayOutcome: ReturnType<typeof normalizeGatewayOutcome>;
     try {
-      const result = await callOrbiPayGateway("/v1/paysafe/escrows", {
-        method: "POST",
-        idempotencyKey: requestIdempotencyKey || undefined,
-        body: {
+      const result = await orbiPayGateway.paysafe.createEscrow(
+        {
           ...(requestIdempotencyKey
             ? {
                 idempotencyKey: requestIdempotencyKey,
@@ -667,7 +665,10 @@ router.post("/", async (req, res) => {
             settlementSplits,
           },
         },
-      });
+        {
+          idempotencyKey: requestIdempotencyKey || undefined,
+        },
+      );
       console.log(`[PAYSAFE_GATEWAY] Live aggregate escrow created for ${oIdBase} ->`, result);
       aggregateGatewayOutcome = normalizeGatewayOutcome(result, oIdBase, paymentRoute);
     } catch (e: any) {

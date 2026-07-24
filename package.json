@@ -11,7 +11,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "keep-alive": "node keep-alive.mjs",
-    "update-pwd": "tsx update_admin_pwd.js"
+    "update-pwd": "tsx update_admin_pwd.js",
+    "seed:orbi-pay-credentials": "tsx scripts/bootstrap-orbi-pay-sdk-credentials.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1073.0",

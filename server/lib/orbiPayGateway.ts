@@ -30,7 +30,7 @@ export function getPayServiceKey(req?: any) {
   ).trim();
 }
 
-export async function callOrbiPayGateway(path: string, options: PayGatewayRequestOptions = {}) {
+async function callOrbiPayGateway(path: string, options: PayGatewayRequestOptions = {}) {
   const baseUrl = requireOrbiPayGatewayBaseUrl();
   const serviceKey = options.serviceKey || getPayServiceKey();
   const idempotencyKey = String(
@@ -102,6 +102,48 @@ export async function callOrbiPayGateway(path: string, options: PayGatewayReques
 
   return data;
 }
+
+export const orbiPayGateway = {
+  identity: {
+    resolve(input: Record<string, unknown>) {
+      return callOrbiPayGateway("/v1/identity/resolve", {
+        method: "POST",
+        body: input,
+      });
+    },
+  },
+  paymentProfiles: {
+    create(input: Record<string, unknown>, options: Pick<PayGatewayRequestOptions, "idempotencyKey" | "serviceKey"> = {}) {
+      return callOrbiPayGateway("/v1/payment-profiles", {
+        method: "POST",
+        body: input,
+        ...options,
+      });
+    },
+  },
+  paysafe: {
+    createEscrow(input: Record<string, unknown>, options: Pick<PayGatewayRequestOptions, "idempotencyKey" | "serviceKey"> = {}) {
+      return callOrbiPayGateway("/v1/paysafe/escrows", {
+        method: "POST",
+        body: input,
+        ...options,
+      });
+    },
+    getEscrow(escrowId: string, options: Pick<PayGatewayRequestOptions, "serviceKey"> = {}) {
+      return callOrbiPayGateway(`/v1/paysafe/escrows/${encodeURIComponent(escrowId)}`, {
+        method: "GET",
+        ...options,
+      });
+    },
+    action(escrowId: string, input: Record<string, unknown>, options: Pick<PayGatewayRequestOptions, "idempotencyKey" | "serviceKey"> = {}) {
+      return callOrbiPayGateway(`/v1/paysafe/escrows/${encodeURIComponent(escrowId)}`, {
+        method: "POST",
+        body: input,
+        ...options,
+      });
+    },
+  },
+};
 
 export function getPaySafeHoldMinutes() {
   return Number(process.env.ORBI_CORE_PAYSAFE_HOLD_MINUTES || process.env.ORBI_PAYSAFE_HOLD_MINUTES || 1440);

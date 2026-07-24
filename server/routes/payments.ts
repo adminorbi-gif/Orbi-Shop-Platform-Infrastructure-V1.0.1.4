@@ -5,7 +5,7 @@ import path from "path";
 import { supabase, getSupabase, encrypt, decrypt } from "../lib/supabase.js";
 import { sendOrbiTalkTemplate } from "./talk.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { callOrbiPayGateway, getPaySafeHoldMinutes, getPayServiceKey, getOrbiPayGatewayBaseUrl } from "../lib/orbiPayGateway.js";
+import { getPaySafeHoldMinutes, getPayServiceKey, getOrbiPayGatewayBaseUrl, orbiPayGateway } from "../lib/orbiPayGateway.js";
 
 const router = Router();
 
@@ -423,11 +423,8 @@ async function initiatePaySafeEscrow(req: any) {
       "",
   ).trim();
 
-  const result = await callOrbiPayGateway("/v1/paysafe/escrows", {
-    method: "POST",
-    serviceKey: getPayServiceKey(req),
-    idempotencyKey: idempotencyKey || undefined,
-    body: {
+  const result = await orbiPayGateway.paysafe.createEscrow(
+    {
       ...(idempotencyKey
         ? {
             idempotencyKey,
@@ -466,7 +463,11 @@ async function initiatePaySafeEscrow(req: any) {
         holdMinutes: getPaySafeHoldMinutes(),
       },
     },
-  });
+    {
+      serviceKey: getPayServiceKey(req),
+      idempotencyKey: idempotencyKey || undefined,
+    },
+  );
 
   return {
     ...result,
@@ -596,9 +597,7 @@ router.post("/verify-payment-auto", async (req: Request, res: Response) => {
     if (gatewayUrl) {
       try {
         console.log(`[PAYMENTS AUTO VERIFY] Contacting live gateway at ${gatewayUrl} for TX ${cleanTxId}`);
-        const result = await callOrbiPayGateway(`/v1/paysafe/escrows/${cleanTxId}`, {
-          method: "GET"
-        });
+        const result = await orbiPayGateway.paysafe.getEscrow(cleanTxId);
         if (result && (result.status === "completed" || result.status === "held" || result.escrowState === "held")) {
           isValid = true;
         } else {

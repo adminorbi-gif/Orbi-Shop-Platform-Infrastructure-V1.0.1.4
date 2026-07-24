@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { callOrbiPayGateway } from "../lib/orbiPayGateway.js";
+import { orbiPayGateway } from "../lib/orbiPayGateway.js";
 
 const router = Router();
 
@@ -18,14 +18,11 @@ router.post("/resolve", async (req, res) => {
       });
     }
 
-    const result = await callOrbiPayGateway("/v1/identity/resolve", {
-      method: "POST",
-      body: {
-        identifier,
-        metadata: {
-          source: "orbi-shop",
-          context: "checkout_payment_identity",
-        },
+    const result = await orbiPayGateway.identity.resolve({
+      identifier,
+      metadata: {
+        source: "orbi-shop",
+        context: "checkout_payment_identity",
       },
     });
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { supabase, getSupabase, getAdminSupabase, encrypt } from '../lib/supabase.js';
-import { callOrbiPayGateway } from '../lib/orbiPayGateway.js';
+import { orbiPayGateway } from '../lib/orbiPayGateway.js';
 
 const router = Router();
 
@@ -31,10 +31,8 @@ async function createSellerPaymentProfile(input: {
   settlementField: 'bankAccount' | 'companyBankAccount';
 }) {
   const idempotencyKey = `orbishop:seller-payment-profile:${input.userId}:${input.settlementField}`;
-  const result = await callOrbiPayGateway('/v1/payment-profiles', {
-    method: 'POST',
-    idempotencyKey,
-    body: {
+  const result = await orbiPayGateway.paymentProfiles.create(
+    {
       idempotencyKey,
       userId: input.userId,
       email: input.email,
@@ -61,7 +59,10 @@ async function createSellerPaymentProfile(input: {
         settlementField: input.settlementField,
       },
     },
-  });
+    {
+      idempotencyKey,
+    },
+  );
 
   const profile = result?.data || result?.paymentProfile || result?.profile || result;
   const profileId = String(profile?.profileId || profile?.paymentProfileId || profile?.id || '').trim();
@@ -78,6 +79,158 @@ async function createSellerPaymentProfile(input: {
     scopes: Array.isArray(profile?.scopes) ? profile.scopes : [],
   };
 }
+
+function getOrbiBusinessIssuer() {
+  return String(process.env.ORBI_BUSINESS_AUTH_ISSUER || process.env.ORBI_KEYCLOAK_ISSUER || 'https://auth.orbifinancial.com/realms/orbi').replace(/\/$/, '');
+}
+
+function getOrbiBusinessClientId() {
+  return String(process.env.ORBI_BUSINESS_AUTH_CLIENT_ID || process.env.ORBI_KEYCLOAK_CLIENT_ID || 'orbi-shop-business').trim();
+}
+
+function getOrbiBusinessClientSecret() {
+  return String(process.env.ORBI_BUSINESS_AUTH_CLIENT_SECRET || process.env.ORBI_KEYCLOAK_CLIENT_SECRET || '').trim();
+}
+
+function appBaseUrl(req: any) {
+  const configured = String(process.env.APP_URL || '').trim().replace(/\/$/, '');
+  if (configured) return configured;
+  const proto = String(req.get?.('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  const host = String(req.get?.('x-forwarded-host') || req.get?.('host') || 'shop.orbifinancial.com').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
+function businessAuthRedirectUri(req: any) {
+  return `${appBaseUrl(req)}/api/auth/orbi-business/link/callback`;
+}
+
+function signBusinessLinkState(payload: Record<string, unknown>) {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const secret = String(process.env.ORBI_BUSINESS_AUTH_STATE_SECRET || process.env.ENCRYPTION_KEY || 'orbi-shop-business-state').trim();
+  const signature = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+  return `${encoded}.${signature}`;
+}
+
+function verifyBusinessLinkState(state: string) {
+  const [encoded, signature] = String(state || '').split('.');
+  if (!encoded || !signature) throw new Error('ORBI_BUSINESS_AUTH_STATE_INVALID');
+  const secret = String(process.env.ORBI_BUSINESS_AUTH_STATE_SECRET || process.env.ENCRYPTION_KEY || 'orbi-shop-business-state').trim();
+  const expected = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    throw new Error('ORBI_BUSINESS_AUTH_STATE_INVALID');
+  }
+  const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  const issuedAt = Number(payload.iat || 0);
+  if (!issuedAt || Date.now() - issuedAt > 10 * 60 * 1000) {
+    throw new Error('ORBI_BUSINESS_AUTH_STATE_EXPIRED');
+  }
+  return payload;
+}
+
+function appendLinkResult(returnTo: string, result: Record<string, string>) {
+  const url = new URL(returnTo || 'https://shop.orbifinancial.com/sellers/signup');
+  Object.entries(result).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
+router.get('/orbi-business/link/start', (req, res) => {
+  try {
+    const mode = String(req.query.mode || 'login') === 'signup' ? 'signup' : 'login';
+    const field = String(req.query.field || 'bankAccount') === 'companyBankAccount' ? 'companyBankAccount' : 'bankAccount';
+    const returnTo = String(req.query.returnTo || req.get('referer') || `${appBaseUrl(req)}/sellers/signup`).trim();
+    const authUrl = new URL(`${getOrbiBusinessIssuer()}/protocol/openid-connect/auth`);
+    authUrl.searchParams.set('client_id', getOrbiBusinessClientId());
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'openid profile email phone orbi.payment_profile.link');
+    authUrl.searchParams.set('redirect_uri', businessAuthRedirectUri(req));
+    authUrl.searchParams.set('state', signBusinessLinkState({
+      returnTo,
+      field,
+      mode,
+      iat: Date.now(),
+    }));
+    if (mode === 'signup') {
+      authUrl.searchParams.set('kc_action', 'register');
+    }
+    return res.redirect(authUrl.toString());
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message || 'ORBI_BUSINESS_AUTH_START_FAILED' });
+  }
+});
+
+router.get('/orbi-business/link/callback', async (req, res) => {
+  let statePayload: any = null;
+  try {
+    const code = String(req.query.code || '').trim();
+    statePayload = verifyBusinessLinkState(String(req.query.state || ''));
+    if (!code) throw new Error('ORBI_BUSINESS_AUTH_CODE_REQUIRED');
+
+    const issuer = getOrbiBusinessIssuer();
+    const tokenBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: getOrbiBusinessClientId(),
+      code,
+      redirect_uri: businessAuthRedirectUri(req),
+    });
+    const clientSecret = getOrbiBusinessClientSecret();
+    if (clientSecret) tokenBody.set('client_secret', clientSecret);
+
+    const tokenResponse = await fetch(`${issuer}/protocol/openid-connect/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: tokenBody,
+    });
+    const tokenData: any = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      throw new Error(tokenData.error_description || tokenData.error || 'ORBI_BUSINESS_AUTH_TOKEN_FAILED');
+    }
+
+    const userInfoResponse = await fetch(`${issuer}/protocol/openid-connect/userinfo`, {
+      headers: { authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const userInfo: any = await userInfoResponse.json().catch(() => ({}));
+    if (!userInfoResponse.ok) {
+      throw new Error(userInfo.error_description || userInfo.error || 'ORBI_BUSINESS_USERINFO_FAILED');
+    }
+
+    const userId = String(userInfo.sub || '').trim();
+    const email = String(userInfo.email || '').trim().toLowerCase();
+    const phone = String(userInfo.phone_number || userInfo.phone || '').trim();
+    const displayName = String(userInfo.name || userInfo.preferred_username || email || phone || 'ORBI Business User').trim();
+    if (!userId && !email && !phone) {
+      throw new Error('ORBI_BUSINESS_ACCOUNT_IDENTITY_MISSING');
+    }
+
+    const profile = await createSellerPaymentProfile({
+      userId: userId || email || phone,
+      email,
+      phone,
+      sellerName: displayName,
+      accountIdentifier: userId || email || phone,
+      role: 'ORBI_BUSINESS_EXTERNAL_LINK',
+      settlementField: statePayload.field === 'companyBankAccount' ? 'companyBankAccount' : 'bankAccount',
+    });
+
+    return res.redirect(appendLinkResult(String(statePayload.returnTo || ''), {
+      orbi_settlement_return: '1',
+      orbi_settlement_field: String(statePayload.field || 'bankAccount'),
+      orbi_payment_profile_id: profile.profileId,
+      orbi_payment_profile_status: profile.status,
+      orbi_account: userId || email || phone,
+      orbi_customer_id: String(userInfo.customer_id || userInfo.orbi_customer_id || userInfo.preferred_username || ''),
+      orbi_link_status: 'success',
+    }));
+  } catch (error: any) {
+    const fallback = statePayload?.returnTo || `${appBaseUrl(req)}/sellers/signup`;
+    return res.redirect(appendLinkResult(String(fallback), {
+      orbi_settlement_return: '1',
+      orbi_link_status: 'failed',
+      orbi_link_error: String(error.message || 'ORBI_BUSINESS_LINK_FAILED').slice(0, 160),
+    }));
+  }
+});
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;

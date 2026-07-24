@@ -33,6 +33,7 @@ import {
   Landmark,
   CreditCard,
   Smartphone,
+  ExternalLink,
 } from 'lucide-react';
 import AboutUsPage from '../../pages/AboutUsPage';
 
@@ -121,6 +122,15 @@ const PRODUCTION_CATEGORIES = ['Agriculture (Crops)', 'Agriculture (Livestock)',
 const CAPACITY_UNITS = ['KG/Month', 'KG/Harvest', 'Tons/Month', 'Tons/Harvest', 'Pieces/Month', 'Liters/Month', 'Units/Day'];
 const INDUSTRY_SECTORS = ['FMCG', 'Construction', 'Pharmaceuticals', 'Agriculture (Processing)', 'Automotive', 'Electronics', 'Textiles', 'Energy', 'Mining', 'Hospitality', 'Education', 'Healthcare', 'Logistics', 'Other'];
 const PAYMENT_TERMS = ['Cash', '30 Days Credit', '60 Days Credit', 'Escrow', 'Letter of Credit', 'Prepayment'];
+
+function buildOrbiBusinessAuthUrl(mode: 'login' | 'signup', fieldName: 'bankAccount' | 'companyBankAccount') {
+  if (typeof window === 'undefined') return '#';
+  const url = new URL('/api/auth/orbi-business/link/start', window.location.origin);
+  url.searchParams.set('mode', mode);
+  url.searchParams.set('field', fieldName);
+  url.searchParams.set('returnTo', window.location.href);
+  return url.toString();
+}
 
 interface BusinessRegistrationFormProps {
   onClose?: () => void;
@@ -337,10 +347,10 @@ export const BusinessRegistrationForm: React.FC<BusinessRegistrationFormProps> =
           </div>
           <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 border border-indigo-100 px-4 py-1.5 rounded-full text-[11px] font-black tracking-widest uppercase mb-4">
             <BadgeCheck size={14} />
-            {t('ORBI BUSINESS', 'ORBI BUSINESS')}
+            {t('ORBI BUSINESS SHOPPING PORTAL', 'ORBI BUSINESS SHOPPING PORTAL')}
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            {t('Jiunge na Orbi Shop For Business', 'Join Orbi Shop For Business')}
+            {t('Jiunge na ORBI BUSINESS SHOPPING PORTAL', 'Join ORBI BUSINESS SHOPPING PORTAL')}
           </h1>
           <p className="text-sm text-slate-500 mt-2 max-w-lg mx-auto">
             {t(
@@ -1438,6 +1448,22 @@ const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
     setValue(methodFieldName, method, { shouldValidate: false });
   }, [method, methodFieldName, setValue]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const linkedAccount =
+      params.get('orbi_payment_profile_id') ||
+      params.get('orbi_customer_id') ||
+      params.get('orbi_account') ||
+      '';
+    const returnedField = params.get('orbi_settlement_field');
+    if (!linkedAccount || params.get('orbi_settlement_return') !== '1') return;
+    if (returnedField && returnedField !== fieldName) return;
+    setMethod('Orbi');
+    setValue(methodFieldName, 'Orbi', { shouldValidate: false });
+    setValue(fieldName, linkedAccount, { shouldValidate: true });
+  }, [fieldName, methodFieldName, setValue]);
+
   const getInstructions = () => {
     switch (method) {
       case 'Orbi':
@@ -1620,6 +1646,48 @@ const SettlementAccountField: React.FC<SettlementAccountFieldProps> = ({
           {inst.hint}
         </p>
       </div>
+
+      {method === 'Orbi' && (
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <img
+                  src="https://media-stock.orbifinancial.com/ORBI_LOGO_Blue.png"
+                  alt="ORBI"
+                  className="h-5 object-contain"
+                  referrerPolicy="no-referrer"
+                />
+                <span className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-700">
+                  {t('Muunganiko salama', 'Secure account link')}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-600">
+                {t(
+                  'Ingia au jisajili kupitia ORBI ili kuruhusu Orbi Shop kupata taarifa muhimu za malipo kwa usalama. ORBI itarudisha payment profile kwa muuzaji baada ya ruhusa yako.',
+                  'Login or create an ORBI account to authorize Orbi Shop to access secure settlement information. ORBI returns a payment profile after your consent.'
+                )}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 shrink-0 md:w-[260px]">
+              <a
+                href={buildOrbiBusinessAuthUrl('login', fieldName)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
+              >
+                {t('Ingia', 'Login')}
+                <ExternalLink size={13} />
+              </a>
+              <a
+                href={buildOrbiBusinessAuthUrl('signup', fieldName)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3 py-2.5 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+              >
+                {t('Jisajili', 'Sign up')}
+                <ExternalLink size={13} />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {errors[fieldName] && (
         <p className="text-xs text-rose-500 mt-1">{errors[fieldName]?.message}</p>
